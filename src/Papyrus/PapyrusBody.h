@@ -2,8 +2,7 @@
 
 #include "Body/Body.h"
 
-namespace PapyrusBody
-{
+namespace PapyrusBody {
 	using VM = RE::BSScript::IVirtualMachine;
 
 	void GenActor(RE::StaticFunctionTag*, RE::Actor* a_actor)
@@ -21,12 +20,12 @@ namespace PapyrusBody
 	void SetNippleRand(RE::StaticFunctionTag*, bool a_enabled)
 	{
 		auto obody = Body::OBody::GetInstance();
-		obody->setNippleRand = a_enabled;
+        obody->setNippleRand = a_enabled;
 	}
 
 	void SetGenitalRand(RE::StaticFunctionTag*, bool a_enabled)
 	{
-		auto obody = Body::OBody::GetInstance();
+        auto obody = Body::OBody::GetInstance();
 		obody->setGenitalRand = a_enabled;
 	}
 

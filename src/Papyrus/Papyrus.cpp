@@ -4,13 +4,11 @@
 #include "Papyrus/PapyrusBody.h"
 #undef BIND
 
-namespace Papyrus
-{
-	void Bind()
-	{
-		auto papyrus = SKSE::GetPapyrusInterface();
-		if (papyrus) {
-			papyrus->Register(PapyrusBody::Bind);
-		}
-	}
-}
+namespace Papyrus {
+    void Bind() {
+        auto papyrus = SKSE::GetPapyrusInterface();
+        if (papyrus) {
+            papyrus->Register(PapyrusBody::Bind);
+        }
+    }
+}  // namespace Papyrus

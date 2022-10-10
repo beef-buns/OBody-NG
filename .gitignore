@@ -8,3 +8,5 @@ meta.ini
 SkyrimSE.code-workspace
 .vscode/launch.json
 .vscode/tasks.json
+.vs/
+build/

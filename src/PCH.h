@@ -4,10 +4,11 @@
 #include "SKSE/SKSE.h"
 
 // Note: add new modules here before using
-#include <random>
-
 #include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
+
 #include <pugixml.hpp>
+#include <random>
 
 namespace WinAPI = SKSE::WinAPI;
 namespace logger = SKSE::log;

@@ -1,91 +1,97 @@
-#include "Version.h"
+#include <stddef.h>
+
 #include "Body/Body.h"
 #include "Body/Event.h"
 #include "Papyrus/Papyrus.h"
 #include "SKEE.h"
 
-void MessageHandler(SKSE::MessagingInterface::Message* a_msg)
-{
-	switch (a_msg->type) {
-	case SKSE::MessagingInterface::kPostLoad:
-		{
-			SKEE::InterfaceExchangeMessage msg;
-			auto intfc = SKSE::GetMessagingInterface();
-			intfc->Dispatch(SKEE::InterfaceExchangeMessage::kExchangeInterface, (void*)&msg, sizeof(SKEE::InterfaceExchangeMessage*), "skee");
-			if (!msg.interfaceMap) {
-				logger::critical("Couldn't get interface map!");
-				return;
-			}
+using namespace RE::BSScript;
+using namespace SKSE;
+using namespace SKSE::log;
+using namespace SKSE::stl;
 
-			auto morphInterface = static_cast<SKEE::IBodyMorphInterface*>(msg.interfaceMap->QueryInterface("BodyMorph"));
-			if (!morphInterface) {
-				logger::critical("Couldn't get serialization MorphInterface!");
-				return;
-			}
+namespace {
+    /**
+     * Setup logging.
+     *
+     * <p>
+     * Logging is important to track issues. CommonLibSSE bundles functionality for spdlog, a common C++ logging
+     * framework. Here we initialize it, using values from the configuration file. This includes support for a debug
+     * logger that shows output in your IDE when it has a debugger attached to Skyrim, as well as a file logger which
+     * writes data to the standard SKSE logging directory at <code>Documents/My Games/Skyrim Special Edition/SKSE</code>
+     * (or <code>Skyrim VR</code> if you are using VR).
+     * </p>
+     */
+    void InitializeLogging() {
+        auto path = log_directory();
+        if (!path) {
+            report_and_fail("Unable to lookup SKSE logs directory.");
+        }
+        *path /= PluginDeclaration::GetSingleton()->GetName();
+        *path += L".log";
 
-			logger::info("BodyMorph Version {}", morphInterface->GetVersion());
-			auto obody = Body::OBody::GetInstance();
-			if (!obody->SetMorphInterface(morphInterface))
-				logger::info("BodyMorphInterace not provided");
+        std::shared_ptr<spdlog::logger> log;
+        if (IsDebuggerPresent()) {
+            log = std::make_shared<spdlog::logger>("Global", std::make_shared<spdlog::sinks::msvc_sink_mt>());
+        } else {
+            log = std::make_shared<spdlog::logger>(
+                "Global", std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true));
+        }
+        log->set_level(spdlog::level::info);
+        log->flush_on(spdlog::level::info);
 
-			obody->setGameLoaded = false;
-			obody->Generate();
-			//obody->PrintDatabase();
+        spdlog::set_default_logger(std::move(log));
+        spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] [%t] [%s:%#] %v");
+    }
 
-			Event::Register();
-		}
-		break;
-	}
-}
+    void MessageHandler(SKSE::MessagingInterface::Message* a_msg) {
+        switch (a_msg->type) {
+            case SKSE::MessagingInterface::kPostLoad: {
+                SKEE::InterfaceExchangeMessage msg;
+                auto intfc = SKSE::GetMessagingInterface();
+                intfc->Dispatch(SKEE::InterfaceExchangeMessage::kExchangeInterface, (void*)&msg,
+                                sizeof(SKEE::InterfaceExchangeMessage*), "skee");
+                if (!msg.interfaceMap) {
+                    logger::critical("Couldn't get interface map!");
+                    return;
+                }
 
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface* a_skse, SKSE::PluginInfo* a_info)
-{
-	auto path = logger::log_directory();
-	if (!path) {
-		return false;
-	}
+                auto morphInterface =
+                    static_cast<SKEE::IBodyMorphInterface*>(msg.interfaceMap->QueryInterface("BodyMorph"));
+                if (!morphInterface) {
+                    logger::critical("Couldn't get serialization MorphInterface!");
+                    return;
+                }
 
-	*path /= fmt::format(FMT_STRING("{}.log"), Version::PROJECT);
-	auto sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true);
-	auto log = std::make_shared<spdlog::logger>("global log"s, std::move(sink));
+                logger::info("BodyMorph Version {}", morphInterface->GetVersion());
+                auto obody = Body::OBody::GetInstance();
+                if (!obody->SetMorphInterface(morphInterface)) logger::info("BodyMorphInterace not provided");
 
-	log->set_level(spdlog::level::info);
-	log->flush_on(spdlog::level::info);
+                obody->setGameLoaded = false;
+                obody->Generate();
+                // obody->PrintDatabase();
 
-	spdlog::set_default_logger(std::move(log));
-	spdlog::set_pattern("OBody: [%^%l%$] %v"s);
+                Event::Register();
+            } break;
+        }
+    }
+}  // namespace
 
-	logger::info(FMT_STRING("{} v{}"), Version::PROJECT, Version::NAME);
+SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
+    InitializeLogging();
 
-	a_info->infoVersion = SKSE::PluginInfo::kVersion;
-	a_info->name = Version::PROJECT.data();
-	a_info->version = Version::MAJOR;
+    auto* plugin = PluginDeclaration::GetSingleton();
+    auto version = plugin->GetVersion();
+    log::info("{} {} is loading...", plugin->GetName(), version);
 
-	if (a_skse->IsEditor()) {
-		logger::critical("Loaded in editor, marking as incompatible"sv);
-		return false;
-	}
+    Init(a_skse);
 
-	const auto ver = a_skse->RuntimeVersion();
-	if (ver < SKSE::RUNTIME_1_5_39) {
-		logger::critical(FMT_STRING("Unsupported runtime version {}"), ver.string());
-		return false;
-	}
+    auto message = SKSE::GetMessagingInterface();
+    if (!message->RegisterListener(MessageHandler)) return false;
 
-	return true;
-}
+    Papyrus::Bind();
 
-extern "C" DLLEXPORT bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
-{
-	SKSE::Init(a_skse);
+    log::info("{} has finished loading.", plugin->GetName());
 
-	auto message = SKSE::GetMessagingInterface();
-	if (!message->RegisterListener(MessageHandler))
-		return false;
-
-	Papyrus::Bind();
-
-	logger::info(FMT_STRING("{} loaded"), Version::PROJECT);
-
-	return true;
+    return true;
 }

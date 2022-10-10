@@ -2,215 +2,169 @@
 
 #include "Body/Body.h"
 
-namespace Event
-{
-	using EventResult = RE::BSEventNotifyControl;
+namespace Event {
+    using EventResult = RE::BSEventNotifyControl;
 
-	class ObjectLoadedEventHandler : public RE::BSTEventSink<RE::TESObjectLoadedEvent>
-	{
-	public:
-		static ObjectLoadedEventHandler* GetSingleton()
-		{
-			static ObjectLoadedEventHandler singleton;
-			return &singleton;
-		}
+    class ObjectLoadedEventHandler : public RE::BSTEventSink<RE::TESObjectLoadedEvent> {
+    public:
+        static ObjectLoadedEventHandler* GetSingleton() {
+            static ObjectLoadedEventHandler singleton;
+            return &singleton;
+        }
 
-		virtual EventResult ProcessEvent(const RE::TESObjectLoadedEvent* a_event, RE::BSTEventSource<RE::TESObjectLoadedEvent>*)
-		{
-			if (!a_event || !a_event->loaded)
-				return EventResult::kContinue;
+        virtual EventResult ProcessEvent(const RE::TESObjectLoadedEvent* a_event,
+                                         RE::BSTEventSource<RE::TESObjectLoadedEvent>*) {
+            if (!a_event || !a_event->loaded) return EventResult::kContinue;
 
-			//Update(a_event->formID);
-			//logger::info("Thing loaded in");
+            auto actor = RE::TESObjectREFR::LookupByID<RE::Actor>(a_event->formID);
 
-			auto actor = RE::TESObjectREFR::LookupByID<RE::Actor>(a_event->formID);
-			if (actor) {
-				auto dobj = RE::BGSDefaultObjectManager::GetSingleton();
-				auto keywordNPC = dobj->GetObject<RE::BGSKeyword>(RE::DEFAULT_OBJECT::kKeywordNPC);
+            if (actor) {
+                logger::info("Trying to get actor form");
+                auto actor_form = RE::TESForm::LookupByID(a_event->formID);
+                logger::info("Actor form is {}", actor_form->GetFormType());
 
-				if (actor->HasKeyword(keywordNPC)){
-					logger::info("Obj load {} appeared", actor->GetName());
-					auto obody = Body::OBody::GetInstance();
-					obody->ProcessActor(actor);
-				}
-			}
+                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                    logger::info("Obj load {} appeared", actor->GetName());
+                    auto obody = Body::OBody::GetInstance();
+                    obody->ProcessActor(actor);
+                }
+            }
 
-			return EventResult::kContinue;
-		}
+            return EventResult::kContinue;
+        }
 
-	private:
-		ObjectLoadedEventHandler() = default;
-		ObjectLoadedEventHandler(const ObjectLoadedEventHandler&) = delete;
-		ObjectLoadedEventHandler(ObjectLoadedEventHandler&&) = delete;
-		virtual ~ObjectLoadedEventHandler() = default;
+    private:
+        ObjectLoadedEventHandler() = default;
+        ObjectLoadedEventHandler(const ObjectLoadedEventHandler&) = delete;
+        ObjectLoadedEventHandler(ObjectLoadedEventHandler&&) = delete;
+        virtual ~ObjectLoadedEventHandler() = default;
 
-		ObjectLoadedEventHandler& operator=(const ObjectLoadedEventHandler&) = delete;
-		ObjectLoadedEventHandler& operator=(ObjectLoadedEventHandler&&) = delete;
-	};
+        ObjectLoadedEventHandler& operator=(const ObjectLoadedEventHandler&) = delete;
+        ObjectLoadedEventHandler& operator=(ObjectLoadedEventHandler&&) = delete;
+    };
 
-	class InitScriptEventHandler : public RE::BSTEventSink<RE::TESInitScriptEvent>
-	{
-	public:
-		static InitScriptEventHandler* GetSingleton()
-		{
-			static InitScriptEventHandler singleton;
-			return &singleton;
-		}
+    class InitScriptEventHandler : public RE::BSTEventSink<RE::TESInitScriptEvent> {
+    public:
+        static InitScriptEventHandler* GetSingleton() {
+            static InitScriptEventHandler singleton;
+            return &singleton;
+        }
 
-		virtual EventResult ProcessEvent(const RE::TESInitScriptEvent* a_event, RE::BSTEventSource<RE::TESInitScriptEvent>*)
-		{
-			if (!a_event || !a_event->objectInitialized->Is3DLoaded())
-				return EventResult::kContinue;
+        virtual EventResult ProcessEvent(const RE::TESInitScriptEvent* a_event,
+                                         RE::BSTEventSource<RE::TESInitScriptEvent>*) {
+            if (!a_event || !a_event->objectInitialized->Is3DLoaded()) return EventResult::kContinue;
 
-			RE::Actor* actor = a_event->objectInitialized->As<RE::Actor>();
-			if (actor) {
-				auto dobj = RE::BGSDefaultObjectManager::GetSingleton();
-				auto keywordNPC = dobj->GetObject<RE::BGSKeyword>(RE::DEFAULT_OBJECT::kKeywordNPC);
+            RE::Actor* actor = a_event->objectInitialized->As<RE::Actor>();
 
-				if (actor->HasKeyword(keywordNPC)){
-					logger::info("Script init {} appeared", actor->GetName());
-					auto obody = Body::OBody::GetInstance();
-					obody->ProcessActor(actor);
-				}
-			}
+            if (actor) {
+                auto actor_form = RE::TESForm::LookupByID(a_event->objectInitialized->As<RE::TESForm>()->GetFormID());
 
-			return EventResult::kContinue;
-		}
+                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                    logger::info("Script init {} appeared", actor->GetName());
+                    auto obody = Body::OBody::GetInstance();
+                    obody->ProcessActor(actor);
+                }
+            }
 
-	private:
-		InitScriptEventHandler() = default;
-		InitScriptEventHandler(const InitScriptEventHandler&) = delete;
-		InitScriptEventHandler(InitScriptEventHandler&&) = delete;
-		virtual ~InitScriptEventHandler() = default;
+            return EventResult::kContinue;
+        }
 
-		InitScriptEventHandler& operator=(const InitScriptEventHandler&) = delete;
-		InitScriptEventHandler& operator=(InitScriptEventHandler&&) = delete;
-	};
+    private:
+        InitScriptEventHandler() = default;
+        InitScriptEventHandler(const InitScriptEventHandler&) = delete;
+        InitScriptEventHandler(InitScriptEventHandler&&) = delete;
+        virtual ~InitScriptEventHandler() = default;
 
-	class LoadGameEventHandler : public RE::BSTEventSink<RE::TESLoadGameEvent>
-	{
-	public:
-		static LoadGameEventHandler* GetSingleton()
-		{
-			static LoadGameEventHandler singleton;
-			return &singleton;
-		}
+        InitScriptEventHandler& operator=(const InitScriptEventHandler&) = delete;
+        InitScriptEventHandler& operator=(InitScriptEventHandler&&) = delete;
+    };
 
-		virtual EventResult ProcessEvent(const RE::TESLoadGameEvent* a_event, RE::BSTEventSource<RE::TESLoadGameEvent>*)
-		{
-			if (!a_event)
-				return EventResult::kContinue;
+    class LoadGameEventHandler : public RE::BSTEventSink<RE::TESLoadGameEvent> {
+    public:
+        static LoadGameEventHandler* GetSingleton() {
+            static LoadGameEventHandler singleton;
+            return &singleton;
+        }
 
-			logger::info("GameLoaded");
+        virtual EventResult ProcessEvent(const RE::TESLoadGameEvent* a_event,
+                                         RE::BSTEventSource<RE::TESLoadGameEvent>*) {
+            if (!a_event) return EventResult::kContinue;
 
-			auto obody = Body::OBody::GetInstance();
-			obody->setGameLoaded = true;
+            logger::info("GameLoaded");
 
-			return EventResult::kContinue;
-		}
+            auto obody = Body::OBody::GetInstance();
+            obody->setGameLoaded = true;
 
-	private:
-		LoadGameEventHandler() = default;
-		LoadGameEventHandler(const LoadGameEventHandler&) = delete;
-		LoadGameEventHandler(LoadGameEventHandler&&) = delete;
-		virtual ~LoadGameEventHandler() = default;
+            return EventResult::kContinue;
+        }
 
-		LoadGameEventHandler& operator=(const LoadGameEventHandler&) = delete;
-		LoadGameEventHandler& operator=(LoadGameEventHandler&&) = delete;
-	};
+    private:
+        LoadGameEventHandler() = default;
+        LoadGameEventHandler(const LoadGameEventHandler&) = delete;
+        LoadGameEventHandler(LoadGameEventHandler&&) = delete;
+        virtual ~LoadGameEventHandler() = default;
 
-	class EquipEventHandler : public RE::BSTEventSink<RE::TESEquipEvent>
-	{
-	public:
-		static EquipEventHandler* GetSingleton()
-		{
-			static EquipEventHandler singleton;
-			return &singleton;
-		}
+        LoadGameEventHandler& operator=(const LoadGameEventHandler&) = delete;
+        LoadGameEventHandler& operator=(LoadGameEventHandler&&) = delete;
+    };
 
-		virtual EventResult ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*)
-		{
-			auto actor = a_event->actor->As<RE::Actor>();
-			if (!a_event || !actor)
-				return EventResult::kContinue;
+    class EquipEventHandler : public RE::BSTEventSink<RE::TESEquipEvent> {
+    public:
+        static EquipEventHandler* GetSingleton() {
+            static EquipEventHandler singleton;
+            return &singleton;
+        }
 
-			auto form = RE::TESForm::LookupByID(a_event->baseObject);
-			if (!form)
-				return EventResult::kContinue;
+        virtual EventResult ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*) {
+            auto actor = a_event->actor->As<RE::Actor>();
+            if (!a_event || !actor) return EventResult::kContinue;
 
-			if (form->Is(RE::FormType::Armor) || form->Is(RE::FormType::Armature)) {
-				auto dobj = RE::BGSDefaultObjectManager::GetSingleton();
-				auto keywordNPC = dobj->GetObject<RE::BGSKeyword>(RE::DEFAULT_OBJECT::kKeywordNPC);
+            auto form = RE::TESForm::LookupByID(a_event->baseObject);
+            if (!form) return EventResult::kContinue;
 
-				if (actor->HasKeyword(keywordNPC)){
-					//logger::info("Processing equipment {} ", actor->GetName());
+            if (form->Is(RE::FormType::Armor) || form->Is(RE::FormType::Armature)) {
+                auto actor_form = RE::TESForm::LookupByID(a_event->actor->As<RE::TESForm>()->GetFormID());
 
-					bool removingBody = false;
-					if (!a_event->equipped){
-						logger::info("Not equipped");
-						auto changes = actor->GetInventoryChanges();					
-						auto const armor = changes->GetArmorInSlot(32);
+                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                    bool removingBody = false;
 
-						if (armor){
-							removingBody = (armor->formID == form->formID);
-						} else {
-							logger::info("armor not found");
-							removingBody = true;
-						}
-					}
+                    if (!a_event->equipped) {
+                        logger::info("Not equipped");
+                        auto changes = actor->GetInventoryChanges();
+                        auto const armor = changes->GetArmorInSlot(32);
 
-					auto obody = Body::OBody::GetInstance();
-					obody->ProcessActorEquipEvent(actor, removingBody);
-				}
-			}
+                        if (armor) {
+                            removingBody = (armor->formID == form->formID);
+                        } else {
+                            logger::info("armor not found");
+                            removingBody = true;
+                        }
+                    }
 
-			return EventResult::kContinue;
-		}
+                    auto obody = Body::OBody::GetInstance();
+                    obody->ProcessActorEquipEvent(actor, removingBody);
+                }
+            }
 
-	private:
-		EquipEventHandler() = default;
-		EquipEventHandler(const EquipEventHandler&) = delete;
-		EquipEventHandler(EquipEventHandler&&) = delete;
-		virtual ~EquipEventHandler() = default;
+            return EventResult::kContinue;
+        }
 
-		EquipEventHandler& operator=(const EquipEventHandler&) = delete;
-		EquipEventHandler& operator=(EquipEventHandler&&) = delete;
-	};
+    private:
+        EquipEventHandler() = default;
+        EquipEventHandler(const EquipEventHandler&) = delete;
+        EquipEventHandler(EquipEventHandler&&) = delete;
+        virtual ~EquipEventHandler() = default;
 
-	/*
-	class AnimationEventHandler : public RE::BSTEventSink<RE::BGSFootstepEvent>
-	{
-	public:
-		static AnimationEventHandler* GetSingleton()
-		{
-			static AnimationEventHandler singleton;
-			return std::addressof(singleton);
-		}
+        EquipEventHandler& operator=(const EquipEventHandler&) = delete;
+        EquipEventHandler& operator=(EquipEventHandler&&) = delete;
+    };
 
-		virtual EventResult ProcessEvent(const RE::BGSFootstepEvent* a_event, RE::BSTEventSource<RE::BGSFootstepEvent>*)
-		{
-			if (!a_event)
-				return EventResult::kContinue;
-
-			auto actor = a_event->actor.get().get();
-			if (actor) {
-				logger::info("Footstep: {}", actor->GetName());
-			}
-
-			return EventResult::kContinue;
-		}
-	};*/
-
-	void Register()
-	{
-		auto events = RE::ScriptEventSourceHolder::GetSingleton();
-		if (events) {
-			//events->AddEventSink(ObjectLoadedEventHandler::GetSingleton());
-			events->AddEventSink(EquipEventHandler::GetSingleton());
-			events->AddEventSink(LoadGameEventHandler::GetSingleton());
-			events->AddEventSink(InitScriptEventHandler::GetSingleton());
-			//events->AddEventSink(AnimationEventHandler::GetSingleton());
-		}
-	}
-}
-
+    void Register() {
+        auto events = RE::ScriptEventSourceHolder::GetSingleton();
+        if (events) {
+            events->AddEventSink(EquipEventHandler::GetSingleton());
+            events->AddEventSink(LoadGameEventHandler::GetSingleton());
+            events->AddEventSink(InitScriptEventHandler::GetSingleton());
+        }
+    }
+}  // namespace Event
