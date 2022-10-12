@@ -615,7 +615,8 @@ namespace Body {
     float OBody::GetWeight(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetWeight() / 100.0f; }
 
     bool OBody::IsClothedSet(std::string& a_set) {
-        std::vector<std::string> clothed{"outfit", "cloth"};
+        std::vector<std::string> clothed{"Cloth", "cloth",  "Outfit", "outfit", "NeverNude", "Bikini", "Feet",
+                                         "Hands", "OUTFIT", "push",   "Push",   "Cleavage",  "Armor",  "Bra"};
         return stl::contains(a_set, clothed);
     }
 

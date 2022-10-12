@@ -69,7 +69,6 @@ namespace {
 
                 obody->setGameLoaded = false;
                 obody->Generate();
-                // obody->PrintDatabase();
 
                 Event::Register();
             } break;
