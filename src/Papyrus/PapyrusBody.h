@@ -3,105 +3,90 @@
 #include "Body/Body.h"
 
 namespace PapyrusBody {
-	using VM = RE::BSScript::IVirtualMachine;
+    using VM = RE::BSScript::IVirtualMachine;
 
-	void GenActor(RE::StaticFunctionTag*, RE::Actor* a_actor)
-	{
-		auto obody = Body::OBody::GetInstance();
-		obody->GenerateActorBody(a_actor);
-	}
-
-	void SetORefit(RE::StaticFunctionTag*, bool a_enabled)
-	{
-		auto obody = Body::OBody::GetInstance();
-		obody->setRefit = a_enabled;
-	}
-
-	void SetNippleRand(RE::StaticFunctionTag*, bool a_enabled)
-	{
-		auto obody = Body::OBody::GetInstance();
-        obody->setNippleRand = a_enabled;
-	}
-
-	void SetGenitalRand(RE::StaticFunctionTag*, bool a_enabled)
-	{
+    void GenActor(RE::StaticFunctionTag*, RE::Actor* a_actor) {
         auto obody = Body::OBody::GetInstance();
-		obody->setGenitalRand = a_enabled;
-	}
+        obody->GenerateActorBody(a_actor);
+    }
 
-	int GetFemaleDatabaseSize(RE::StaticFunctionTag*)
-	{
-		auto obody = Body::OBody::GetInstance();
-		return static_cast<int>(obody->femalePresets.size());
-	}
+    void SetORefit(RE::StaticFunctionTag*, bool a_enabled) {
+        auto obody = Body::OBody::GetInstance();
+        obody->setRefit = a_enabled;
+    }
 
-	int GetMaleDatabaseSize(RE::StaticFunctionTag*)
-	{
-		auto obody = Body::OBody::GetInstance();
-		return static_cast<int>(obody->malePresets.size());
-	}
+    void SetNippleRand(RE::StaticFunctionTag*, bool a_enabled) {
+        auto obody = Body::OBody::GetInstance();
+        obody->setNippleRand = a_enabled;
+    }
 
-	void RegisterForOBodyEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest)
-	{
-		Body::OnActorGenerated.Register(a_quest);
-	}
+    void SetGenitalRand(RE::StaticFunctionTag*, bool a_enabled) {
+        auto obody = Body::OBody::GetInstance();
+        obody->setGenitalRand = a_enabled;
+    }
 
-	void RegisterForOBodyNakedEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest)
-	{
-		Body::OnActorNaked.Register(a_quest);
-	}
+    int GetFemaleDatabaseSize(RE::StaticFunctionTag*) {
+        auto obody = Body::OBody::GetInstance();
+        return static_cast<int>(obody->femalePresets.size());
+    }
 
-	void ApplyPresetByFile(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_path)
-	{
-		auto obody = Body::OBody::GetInstance();
-		obody->GenerateBodyByFile(a_actor, a_path);
-	}
+    int GetMaleDatabaseSize(RE::StaticFunctionTag*) {
+        auto obody = Body::OBody::GetInstance();
+        return static_cast<int>(obody->malePresets.size());
+    }
 
-	void ApplyPresetByName(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_name)
-	{
-		auto obody = Body::OBody::GetInstance();
-		obody->GenerateBodyByName(a_actor, a_name);
-	}
+    void RegisterForOBodyEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest) {
+        Body::OnActorGenerated.Register(a_quest);
+    }
 
-	void AddClothesOverlay(RE::StaticFunctionTag*, RE::Actor* a_actor)
-	{
-		auto obody = Body::OBody::GetInstance();
-		obody->ApplyClothePreset(a_actor);
-		obody->ApplyMorphs(a_actor);
-	}
+    void RegisterForOBodyNakedEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest) {
+        Body::OnActorNaked.Register(a_quest);
+    }
 
-	auto GetAllPossiblePresets(RE::StaticFunctionTag*, RE::Actor* a_actor)
-	{
-		std::vector<RE::BSFixedString> ret;
-		auto obody = Body::OBody::GetInstance();
-		if (obody->IsFemale(a_actor))
-			for (auto& preset : obody->femalePresets)
-				ret.push_back(preset.name);
-		else
-			for (auto& preset : obody->malePresets)
-				ret.push_back(preset.name);
+    void ApplyPresetByFile(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_path) {
+        auto obody = Body::OBody::GetInstance();
+        obody->GenerateBodyByFile(a_actor, a_path);
+    }
 
-		return ret;
-	}
+    void ApplyPresetByName(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_name) {
+        auto obody = Body::OBody::GetInstance();
+        obody->GenerateBodyByName(a_actor, a_name);
+    }
 
-	bool Bind(VM* a_vm)
-	{
-		const auto obj = "OBodyNative"sv;
+    void AddClothesOverlay(RE::StaticFunctionTag*, RE::Actor* a_actor) {
+        auto obody = Body::OBody::GetInstance();
+        obody->ApplyClothePreset(a_actor);
+        obody->ApplyMorphs(a_actor);
+    }
 
-		BIND(GenActor);
-		BIND(ApplyPresetByFile);
-		BIND(ApplyPresetByName);
-		BIND(GetAllPossiblePresets);
-		BIND(AddClothesOverlay);
-		BIND(RegisterForOBodyEvent);
-		BIND(RegisterForOBodyNakedEvent);
-		BIND(GetFemaleDatabaseSize);
-		BIND(GetMaleDatabaseSize);
+    auto GetAllPossiblePresets(RE::StaticFunctionTag*, RE::Actor* a_actor) {
+        std::vector<RE::BSFixedString> ret;
+        auto obody = Body::OBody::GetInstance();
+        if (obody->IsFemale(a_actor))
+            for (auto& preset : obody->femalePresets) ret.push_back(preset.name);
+        else
+            for (auto& preset : obody->malePresets) ret.push_back(preset.name);
 
-		BIND(SetORefit);
-		BIND(SetNippleRand);
-		BIND(SetGenitalRand);
+        return ret;
+    }
 
-		return true;
-	}
-}
+    bool Bind(VM* a_vm) {
+        const auto obj = "OBodyNative"sv;
+
+        BIND(GenActor);
+        BIND(ApplyPresetByFile);
+        BIND(ApplyPresetByName);
+        BIND(GetAllPossiblePresets);
+        BIND(AddClothesOverlay);
+        BIND(RegisterForOBodyEvent);
+        BIND(RegisterForOBodyNakedEvent);
+        BIND(GetFemaleDatabaseSize);
+        BIND(GetMaleDatabaseSize);
+
+        BIND(SetORefit);
+        BIND(SetNippleRand);
+        BIND(SetGenitalRand);
+
+        return true;
+    }
+}  // namespace PapyrusBody
