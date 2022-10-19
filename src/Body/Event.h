@@ -19,11 +19,7 @@ namespace Event {
             auto actor = RE::TESObjectREFR::LookupByID<RE::Actor>(a_event->formID);
 
             if (actor) {
-                logger::info("Trying to get actor form");
-                auto actor_form = RE::TESForm::LookupByID(a_event->formID);
-                logger::info("Actor form is {}", actor_form->GetFormType());
-
-                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
                     logger::info("Obj load {} appeared", actor->GetName());
                     auto obody = Body::OBody::GetInstance();
                     obody->ProcessActor(actor);
@@ -57,9 +53,7 @@ namespace Event {
             RE::Actor* actor = a_event->objectInitialized->As<RE::Actor>();
 
             if (actor) {
-                auto actor_form = RE::TESForm::LookupByID(a_event->objectInitialized->As<RE::TESForm>()->GetFormID());
-
-                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
                     logger::info("Script init {} appeared", actor->GetName());
                     auto obody = Body::OBody::GetInstance();
                     obody->ProcessActor(actor);
@@ -123,9 +117,7 @@ namespace Event {
             if (!form) return EventResult::kContinue;
 
             if (form->Is(RE::FormType::Armor) || form->Is(RE::FormType::Armature)) {
-                auto actor_form = RE::TESForm::LookupByID(a_event->actor->As<RE::TESForm>()->GetFormID());
-
-                if (actor_form->Is((RE::FormType::ActorCharacter))) {
+                if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
                     bool removingBody = false;
 
                     if (!a_event->equipped) {
