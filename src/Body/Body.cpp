@@ -65,7 +65,7 @@ namespace Body {
         stl::files(root_path, files, ".xml");
 
         for (auto& entry : files) {
-            if (IsClothedSet(entry)) continue;
+            if (IsClothedSet(entry) || IsZeroedPreset(entry)) continue;
 
             pugi::xml_document doc;
             auto result = doc.load_file(entry.c_str());
@@ -208,7 +208,7 @@ namespace Body {
 
     std::optional<Preset> OBody::GeneratePreset(pugi::xml_node& a_node) {
         std::string name = a_node.attribute("name").value();
-        if (IsClothedSet(name)) return std::nullopt;
+        if (IsClothedSet(name) || IsZeroedPreset(name)) return std::nullopt;
 
         std::string body = a_node.attribute("set").value();
         auto sliderSet = SliderSetFromNode(a_node, GetBodyType(body));
@@ -259,7 +259,7 @@ namespace Body {
         bool female = IsFemale(a_actor);
         if ((female && femalePresets.size() < 1) || !female && malePresets.size() < 1) {
             SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
-            OnActorGenerated.SendEvent(a_actor);
+            OnActorGenerated.SendEvent(a_actor, preset.name);
             return;
         }
 
@@ -292,7 +292,7 @@ namespace Body {
 
         GenerateBodyByPreset(a_actor, preset);
         SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
-        OnActorGenerated.SendEvent(a_actor);
+        OnActorGenerated.SendEvent(a_actor, preset.name);
     }
 
     void OBody::GenerateBodyByFile(RE::Actor* a_actor, std::string a_path) {
@@ -615,9 +615,24 @@ namespace Body {
     float OBody::GetWeight(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetWeight() / 100.0f; }
 
     bool OBody::IsClothedSet(std::string& a_set) {
-        std::vector<std::string> clothed{"Cloth", "cloth",  "Outfit", "outfit", "NeverNude", "Bikini", "Feet",
-                                         "Hands", "OUTFIT", "push",   "Push",   "Cleavage",  "Armor",  "Bra"};
-        return stl::contains(a_set, clothed);
+        std::string presetName = a_set;
+
+        std::vector<std::string> clothed{"cloth", "outfit", "nevernude", "bikini", "feet",
+                                         "hands", "push",   "cleavage",  "armor"};
+
+        std::transform(presetName.begin(), presetName.end(), presetName.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        return stl::contains(presetName, clothed);
+    }
+
+    bool OBody::IsZeroedPreset(std::string& a_set) {
+        std::string presetName = a_set;
+
+        std::transform(presetName.begin(), presetName.end(), presetName.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        return (presetName.find("zeroed") != std::string::npos);
     }
 
     bool OBody::IsClotheActive(RE::Actor* a_actor) { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }

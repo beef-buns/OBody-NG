@@ -3,7 +3,7 @@
 #include "SKEE.h"
 
 namespace Body {
-    inline SKSE::RegistrationSet<RE::Actor*> OnActorGenerated("OnActorGenerated"sv);
+    inline SKSE::RegistrationSet<RE::Actor*, std::string> OnActorGenerated("OnActorGenerated"sv);
     inline SKSE::RegistrationSet<RE::Actor*> OnActorNaked("OnActorNaked"sv);
 
     enum class BodyType : int32_t { CBBE, UNP };
@@ -104,6 +104,7 @@ namespace Body {
         float GetWeight(RE::Actor* a_actor);
 
         bool IsClothedSet(std::string& a_set);
+        bool IsZeroedPreset(std::string& a_set);
         bool IsClotheActive(RE::Actor* a_actor);
         bool IsNaked(RE::Actor* a_actor);
         bool IsFemale(RE::Actor* a_actor);
