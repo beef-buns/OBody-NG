@@ -302,7 +302,9 @@ namespace Body {
         }
 
         auto actorName = a_actor->GetActorBase()->GetName();
-        auto actorRace = a_actor->GetActorBase()->GetRace()->GetName();
+        auto actorRace = a_actor->GetActorBase()->GetRace()->GetFormEditorID();
+
+		logger::info("Actor race is: {}", actorRace);
 
         if (std::find(presetDistributionConfig["blacklistedNpcs"].begin(),
                       presetDistributionConfig["blacklistedNpcs"].end(),
