@@ -79,6 +79,7 @@ namespace Body {
 
         Preset GetPresetByName(PresetSet& a_presetSet, std::string a_name);
         Preset GetRandomPreset(PresetSet& a_presetSet);
+        Preset GetRandomPresetByName(PresetSet& a_presetSet, std::vector<std::string> a_presetNames);
         PresetSet SortPresetSetByRaceStat(PresetSet& a_presetSet, RaceStat& a_stat);
         PresetSet SortPresetSetByBodypart(PresetSet& a_presetSet, std::string a_bodypart);
 
@@ -129,9 +130,17 @@ namespace Body {
         PresetSet femalePresets;
         PresetSet malePresets;
 
+        PresetSet blacklistedFemalePresets;
+        PresetSet blacklistedMalePresets;
+
+        PresetSet allFemalePresets;
+        PresetSet allMalePresets;
+
         PartScoreSet breastScores;
         PartScoreSet buttScores;
         PartScoreSet waistScores;
+
+        json presetDistributionConfig;
 
     private:
         OBody(const OBody&) = delete;

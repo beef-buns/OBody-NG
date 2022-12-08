@@ -64,8 +64,11 @@ namespace Body {
         std::vector<std::string> files;
         stl::files(root_path, files, ".xml");
 
+        auto blacklistedPresetsBegin = presetDistributionConfig["blacklistedPresetsFromRandomDistribution"].begin();
+        auto blacklistedPresetsEnd = presetDistributionConfig["blacklistedPresetsFromRandomDistribution"].end();
+
         for (auto& entry : files) {
-            if (IsClothedSet(entry) || IsZeroedPreset(entry)) continue;
+            if (IsClothedSet(entry)) continue;
 
             pugi::xml_document doc;
             auto result = doc.load_file(entry.c_str());
@@ -79,12 +82,30 @@ namespace Body {
                 auto preset = GeneratePreset(node);
                 if (!preset) continue;
 
-                if (IsFemalePreset(*preset))
-                    femalePresets.push_back(*preset);
-                else
-                    malePresets.push_back(*preset);
+                if (IsFemalePreset(*preset)) {
+                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
+                        blacklistedPresetsEnd) {
+                        blacklistedFemalePresets.push_back(*preset);
+                    } else {
+                        femalePresets.push_back(*preset);
+                    }
+                } else {
+                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
+                        blacklistedPresetsEnd) {
+                        blacklistedMalePresets.push_back(*preset);
+                    } else {
+                        malePresets.push_back(*preset);
+                    }
+                }
             }
         }
+
+        allFemalePresets = femalePresets;
+        allFemalePresets.insert(allFemalePresets.end(), blacklistedFemalePresets.begin(),
+                                blacklistedFemalePresets.end());
+
+        allMalePresets = malePresets;
+        allMalePresets.insert(allMalePresets.end(), blacklistedMalePresets.begin(), blacklistedMalePresets.end());
 
         logger::info("Female presets: {}", femalePresets.size());
         logger::info("Male presets: {}", malePresets.size());
@@ -124,8 +145,11 @@ namespace Body {
     Preset OBody::GetPresetByName(PresetSet& a_presetSet, std::string a_name) {
         logger::info("Looking for preset: {}", a_name);
 
+        boost::trim(a_name);
+        boost::to_upper(a_name);
+
         for (auto& preset : a_presetSet) {
-            if (stl::cmp(preset.name, a_name)) return preset;
+            if (stl::cmp(boost::to_upper_copy(preset.name), a_name)) return preset;
         }
 
         auto preset = a_presetSet.front();
@@ -142,6 +166,16 @@ namespace Body {
         auto size = static_cast<int>(a_presetSet.size());
         std::uniform_int_distribution<int> choose(0, size - 1);
         return a_presetSet[choose(engine)];
+    }
+
+    Preset OBody::GetRandomPresetByName(PresetSet& a_presetSet, std::vector<std::string> a_presetNames) {
+        std::random_device seed;
+        // generator
+        std::mt19937 engine(seed());
+        // number distribution
+        auto size = static_cast<int>(a_presetNames.size());
+        std::uniform_int_distribution<int> choose(0, size - 1);
+        return GetPresetByName(a_presetSet, a_presetNames[choose(engine)]);
     }
 
     PresetSet OBody::SortPresetSetByRaceStat(PresetSet& a_presetSet, RaceStat& a_stat) {
@@ -208,7 +242,11 @@ namespace Body {
 
     std::optional<Preset> OBody::GeneratePreset(pugi::xml_node& a_node) {
         std::string name = a_node.attribute("name").value();
-        if (IsClothedSet(name) || IsZeroedPreset(name)) return std::nullopt;
+
+        // Some preset names have dumb trailing whitespaces which may mess up the configuration file...
+        boost::trim(name);
+
+        if (IsClothedSet(name)) return std::nullopt;
 
         std::string body = a_node.attribute("set").value();
         auto sliderSet = SliderSetFromNode(a_node, GetBodyType(body));
@@ -257,13 +295,33 @@ namespace Body {
     void OBody::GenerateActorBody(RE::Actor* a_actor) {
         Preset preset;
         bool female = IsFemale(a_actor);
+
         if ((female && femalePresets.size() < 1) || !female && malePresets.size() < 1) {
             SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
-            OnActorGenerated.SendEvent(a_actor, preset.name);
             return;
         }
 
-        if (female) {
+        auto actorName = a_actor->GetActorBase()->GetName();
+        auto actorRace = a_actor->GetActorBase()->GetRace()->GetName();
+
+        if (std::find(presetDistributionConfig["blacklistedNpcs"].begin(),
+                      presetDistributionConfig["blacklistedNpcs"].end(),
+                      actorName) != presetDistributionConfig["blacklistedNpcs"].end()) {
+            SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
+            return;
+        }
+
+        if (presetDistributionConfig["npc"].contains(actorName)) {
+            preset = GetRandomPresetByName(female ? allFemalePresets : allMalePresets,
+                                           presetDistributionConfig["npc"][actorName]);
+        }
+
+        else if (presetDistributionConfig["race"].contains(actorRace)) {
+            preset = GetRandomPresetByName(female ? allFemalePresets : allMalePresets,
+                                           presetDistributionConfig["race"][actorRace]);
+        }
+
+        else if (female) {
             if (raceStats.size() > 0) {
                 auto stat = GetCorrespondingRaceStat(a_actor);
                 if (stat.value > -1) {

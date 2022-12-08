@@ -67,6 +67,9 @@ namespace {
                 auto obody = Body::OBody::GetInstance();
                 if (!obody->SetMorphInterface(morphInterface)) logger::info("BodyMorphInterace not provided");
 
+                std::ifstream f(L"Data/SKSE/Plugins/OBody_presetDistributionConfig.json");
+                obody->presetDistributionConfig = json::parse(f);
+
                 obody->setGameLoaded = false;
                 obody->Generate();
 

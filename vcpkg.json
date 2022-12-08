@@ -15,7 +15,8 @@
                 "pugixml",
                 "nlohmann-json",
                 "boost-stl-interfaces",
-                "span-lite"
+                "span-lite",
+                "boost-algorithm"
             ]
         }
     },

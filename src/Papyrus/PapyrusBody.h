@@ -62,10 +62,20 @@ namespace PapyrusBody {
     auto GetAllPossiblePresets(RE::StaticFunctionTag*, RE::Actor* a_actor) {
         std::vector<RE::BSFixedString> ret;
         auto obody = Body::OBody::GetInstance();
-        if (obody->IsFemale(a_actor))
-            for (auto& preset : obody->femalePresets) ret.push_back(preset.name);
-        else
-            for (auto& preset : obody->malePresets) ret.push_back(preset.name);
+
+        if (obody->IsFemale(a_actor)) {
+            if (obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"]) {
+                for (auto& preset : obody->allFemalePresets) ret.push_back(preset.name);
+            } else {
+                for (auto& preset : obody->femalePresets) ret.push_back(preset.name);
+            }
+        } else {
+            if (obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"]) {
+                for (auto& preset : obody->allMalePresets) ret.push_back(preset.name);
+            } else {
+                for (auto& preset : obody->malePresets) ret.push_back(preset.name);
+            }
+        }
 
         return ret;
     }
