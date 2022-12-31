@@ -40,10 +40,10 @@ namespace Body {
         }
     }
 
-    void OBody::ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor) {
+    void OBody::ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
         if (!IsProcessed(a_actor)) return;
 
-        bool naked = IsNaked(a_actor);
+        bool naked = IsNaked(a_actor, a_removingArmor, a_equippedArmor);
         bool clotheActive = IsClotheActive(a_actor);
 
         if (!(naked) && (a_removingArmor)) {
@@ -51,9 +51,11 @@ namespace Body {
             OnActorNaked.SendEvent(a_actor);
         }
 
-        if (clotheActive && (naked || a_removingArmor)) {
+        if (clotheActive && naked) {
+            logger::info("Removing clothed preset to actor {}", a_actor->GetName());
             RemoveClothePreset(a_actor);
         } else if (!clotheActive && !naked && setRefit) {
+            logger::info("Applying clothed preset to actor {}", a_actor->GetName());
             ApplyClothePreset(a_actor);
         }
 
@@ -304,23 +306,27 @@ namespace Body {
         auto actorName = a_actor->GetActorBase()->GetName();
         auto actorRace = a_actor->GetActorBase()->GetRace()->GetFormEditorID();
 
-		logger::info("Actor race is: {}", actorRace);
+        logger::info("Actor race is: {}", actorRace);
 
-        if (std::find(presetDistributionConfig["blacklistedNpcs"].begin(),
-                      presetDistributionConfig["blacklistedNpcs"].end(),
-                      actorName) != presetDistributionConfig["blacklistedNpcs"].end()) {
+        if (IsStringInJsonConfigKey(actorName, "blacklistedNpcs") ||
+            IsStringInJsonConfigKey(actorRace, "blacklistedRaces")) {
             SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
             return;
         }
 
-        if (presetDistributionConfig["npc"].contains(actorName)) {
+        if (presetDistributionConfig.contains("npc") && presetDistributionConfig["npc"].contains(actorName)) {
             preset = GetRandomPresetByName(female ? allFemalePresets : allMalePresets,
                                            presetDistributionConfig["npc"][actorName]);
         }
 
-        else if (presetDistributionConfig["race"].contains(actorRace)) {
-            preset = GetRandomPresetByName(female ? allFemalePresets : allMalePresets,
-                                           presetDistributionConfig["race"][actorRace]);
+        else if (female && presetDistributionConfig.contains("raceFemale") &&
+                 presetDistributionConfig["raceFemale"].contains(actorRace)) {
+            preset = GetRandomPresetByName(allFemalePresets, presetDistributionConfig["raceFemale"][actorRace]);
+        }
+
+        else if (!female && presetDistributionConfig.contains("raceMale") &&
+                 presetDistributionConfig["raceMale"].contains(actorRace)) {
+            preset = GetRandomPresetByName(allMalePresets, presetDistributionConfig["raceMale"][actorRace]);
         }
 
         else if (female) {
@@ -364,9 +370,9 @@ namespace Body {
         // do not send this an invalid name, you have been warned
         Preset preset;
         if (IsFemale(a_actor))
-            preset = GetPresetByName(femalePresets, a_name);
+            preset = GetPresetByName(allFemalePresets, a_name);
         else
-            preset = GetPresetByName(malePresets, a_name);
+            preset = GetPresetByName(allMalePresets, a_name);
 
         GenerateBodyByPreset(a_actor, preset);
     }
@@ -393,12 +399,13 @@ namespace Body {
             }
         }
 
-        if (!IsNaked(a_actor)) {
+        if (!IsNaked(a_actor, false, nullptr)) {
             if (setRefit) {
                 logger::info("Not naked, adding cloth preset");
                 ApplyClothePreset(a_actor);
             }
         } else {
+            logger::info("Actor is naked, not applying cloth preset");
             OnActorNaked.SendEvent(a_actor);
         }
 
@@ -697,10 +704,43 @@ namespace Body {
 
     bool OBody::IsClotheActive(RE::Actor* a_actor) { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }
 
-    bool OBody::IsNaked(RE::Actor* a_actor) {
-        auto changes = a_actor->GetInventoryChanges();
-        auto armor = changes->GetArmorInSlot(32);
-        return armor ? false : true;
+    bool OBody::IsOutfitBlacklisted(std::string a_outfit) {
+        return a_outfit.empty() || IsStringInJsonConfigKey(a_outfit, "blacklistedOutfitsFromORefit");
+    }
+
+    bool OBody::IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
+        auto outfitBody = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody);
+        auto outergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary);
+        auto undergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary);
+
+        // When the TES EquipEvent is sent, the inventory isn't updated yet
+        // So we have to check if any of these armors is being removed...
+        if (a_removingArmor) {
+            if (outfitBody == a_equippedArmor) {
+                outfitBody = nullptr;
+            } else if (outergarmentChest == a_equippedArmor) {
+                outergarmentChest = nullptr;
+            } else if (undergarmentChest == a_equippedArmor) {
+                undergarmentChest = nullptr;
+            }
+        }
+
+        bool isActorNaked = false;
+
+        std::string outfitBodyName = outfitBody ? outfitBody->GetName() : "";
+        std::string outergarmentChestName = outergarmentChest ? outergarmentChest->GetName() : "";
+        std::string undergarmentChestName = undergarmentChest ? undergarmentChest->GetName() : "";
+
+        // if outfit is blacklisted from ORefit, we assume as not having the outfit so ORefit is not applied
+        bool hasBodyOutfit = IsOutfitBlacklisted(outfitBodyName);
+        bool hasOutergarment = IsOutfitBlacklisted(outergarmentChestName);
+        bool hasUndergarment = IsOutfitBlacklisted(undergarmentChestName);
+
+        // Actor counts as naked if:
+        // he has no clothing in the slots defined above / they are blacklisted from ORefit
+        // if the items in the outfitsForceRefit key are not equipped
+        return hasBodyOutfit && hasOutergarment && hasUndergarment &&
+               !IsAnyForceRefitItemEquipped(a_actor, a_removingArmor, a_equippedArmor);
     }
 
     bool OBody::IsFemale(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetSex() == 1; }
@@ -711,6 +751,40 @@ namespace Body {
     }
 
     bool OBody::IsProcessed(RE::Actor* a_actor) { return GetMorph(a_actor, "obody_processed") == 1.0f; }
+
+    bool OBody::IsStringInJsonConfigKey(std::string a_value, std::string key) {
+        boost::trim(a_value);
+
+        return presetDistributionConfig.contains(key) &&
+               std::find(presetDistributionConfig[key].begin(), presetDistributionConfig[key].end(), a_value) !=
+                   presetDistributionConfig[key].end();
+    }
+
+    bool OBody::IsAnyForceRefitItemEquipped(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
+        auto inventory = a_actor->GetInventory();
+
+        std::vector<std::string> wornItems;
+
+        for (auto const& item : inventory) {
+            if (item.second.second->IsWorn()) {
+                // Check if the item is being unequipped or not first
+                if (a_removingArmor && item.first->GetFormID() == a_equippedArmor->GetFormID()) {
+                    continue;
+                }
+
+                RE::FormType itemFormType = item.first->GetFormType();
+
+                if ((itemFormType == RE::FormType::Armor || itemFormType == RE::FormType::Armature) &&
+                    IsStringInJsonConfigKey(item.second.second->GetDisplayName(), "outfitsForceRefit")) {
+                    logger::info("Outfit {} is in force refit list", item.second.second->GetDisplayName());
+
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     void OBody::PrintSliderSet(SliderSet& a_sliderSet) {
         logger::info(" > Sliders:");

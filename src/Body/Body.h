@@ -63,7 +63,7 @@ namespace Body {
         void ApplyMorphs(RE::Actor* a_actor);
 
         void ProcessActor(RE::Actor* a_actor);
-        void ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor);
+        void ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
 
         void Generate();
         void GenerateRaceStatDB();
@@ -107,10 +107,15 @@ namespace Body {
         bool IsClothedSet(std::string& a_set);
         bool IsZeroedPreset(std::string& a_set);
         bool IsClotheActive(RE::Actor* a_actor);
-        bool IsNaked(RE::Actor* a_actor);
+        bool IsOutfitBlacklisted(std::string a_outfit);
+        bool IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
         bool IsFemale(RE::Actor* a_actor);
         bool IsFemalePreset(Preset& a_preset);
         bool IsProcessed(RE::Actor* a_actor);
+
+        bool IsStringInJsonConfigKey(std::string a_value, std::string key);
+
+        bool IsAnyForceRefitItemEquipped(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
 
         void PrintSliderSet(SliderSet& a_sliderSet);
         void PrintPreset(Preset& a_preset);

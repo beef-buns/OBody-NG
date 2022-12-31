@@ -118,23 +118,8 @@ namespace Event {
 
             if (form->Is(RE::FormType::Armor) || form->Is(RE::FormType::Armature)) {
                 if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
-                    bool removingBody = false;
-
-                    if (!a_event->equipped) {
-                        logger::info("Not equipped");
-                        auto changes = actor->GetInventoryChanges();
-                        auto const armor = changes->GetArmorInSlot(32);
-
-                        if (armor) {
-                            removingBody = (armor->formID == form->formID);
-                        } else {
-                            logger::info("armor not found");
-                            removingBody = true;
-                        }
-                    }
-
                     auto obody = Body::OBody::GetInstance();
-                    obody->ProcessActorEquipEvent(actor, removingBody);
+                    obody->ProcessActorEquipEvent(actor, !a_event->equipped, form);
                 }
             }
 

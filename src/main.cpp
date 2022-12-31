@@ -67,9 +67,6 @@ namespace {
                 auto obody = Body::OBody::GetInstance();
                 if (!obody->SetMorphInterface(morphInterface)) logger::info("BodyMorphInterace not provided");
 
-                std::ifstream f(L"Data/SKSE/Plugins/OBody_presetDistributionConfig.json");
-                obody->presetDistributionConfig = json::parse(f);
-
                 obody->setGameLoaded = false;
                 obody->Generate();
 
@@ -87,6 +84,12 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     log::info("{} {} is loading...", plugin->GetName(), version);
 
     Init(a_skse);
+
+	auto obody = Body::OBody::GetInstance();
+    std::ifstream f(L"Data/SKSE/Plugins/OBody_presetDistributionConfig.json");
+    obody->presetDistributionConfig = json::parse(f);
+
+	log::info("OBody has finished parsing the JSON config file.");
 
     auto message = SKSE::GetMessagingInterface();
     if (!message->RegisterListener(MessageHandler)) return false;

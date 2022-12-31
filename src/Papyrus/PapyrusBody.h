@@ -63,14 +63,29 @@ namespace PapyrusBody {
         std::vector<RE::BSFixedString> ret;
         auto obody = Body::OBody::GetInstance();
 
+        bool showBlacklistedPresets = false;
+
+        // For some reason, some users get CTDs when reading this value, even when everything else seems correct...
+        // Also happens when used with Immersive Equipment displays. I have no idea why.
+        // Catch the error, default to True in case something fails
+        try {
+            showBlacklistedPresets = obody->presetDistributionConfig.contains("blacklistedPresetsShowInOBodyMenu") &&
+                                     obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"];
+        } catch (json::type_error) {
+            logger::info(
+                "Failed to read blacklistedPresetsShowInOBodyMenu key. Defaulting to showing the blacklisted presets "
+                "in OBody menu.");
+            showBlacklistedPresets = true;
+        }
+
         if (obody->IsFemale(a_actor)) {
-            if (obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"]) {
+            if (showBlacklistedPresets) {
                 for (auto& preset : obody->allFemalePresets) ret.push_back(preset.name);
             } else {
                 for (auto& preset : obody->femalePresets) ret.push_back(preset.name);
             }
         } else {
-            if (obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"]) {
+            if (showBlacklistedPresets) {
                 for (auto& preset : obody->allMalePresets) ret.push_back(preset.name);
             } else {
                 for (auto& preset : obody->malePresets) ret.push_back(preset.name);
