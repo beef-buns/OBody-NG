@@ -23,6 +23,8 @@ configure_file(
 set(sources
     src/Body/Body.cpp
         src/Papyrus/Papyrus.cpp
+        src/JSONParser/JSONParser.cpp
+        src/PresetManager/PresetManager.cpp
         src/main.cpp
 
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)

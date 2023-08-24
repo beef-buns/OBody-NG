@@ -1,14 +1,11 @@
 #include "Body/Body.h"
 
-#include "Body/Default.h"
+#include "JSONParser/JSONParser.h"
 #include "STL.h"
 
+using namespace PresetManager;
+
 namespace Body {
-    const fs::path root_path("Data\\CalienteTools\\BodySlide\\SliderPresets");
-
-    OBody::OBody()
-        : breastScores(DefaultBreastScores), buttScores(DefaultButtScores), waistScores(DefaultWaistScores) {}
-
     OBody* OBody::GetInstance() {
         static OBody instance;
         return std::addressof(instance);
@@ -26,22 +23,69 @@ namespace Body {
         return morphInterface->GetMorph(a_actor, a_morphName, "OBody");
     }
 
-    void OBody::ApplyMorphs(RE::Actor* a_actor) {
-        morphInterface->ApplyBodyMorphs(a_actor, true);
-        morphInterface->UpdateModelWeight(a_actor, false);
-    }
+    void OBody::ApplyMorphs(RE::Actor* a_actor, bool updateMorphsWithoutTimer, bool applyProcessedMorph) {
+        // If updateMorphsWithoutTimer is true, OBody NG will call the ApplyBodyMorphs function without waiting a random
+        // amount of time. That is useful for undressing/redressing.
 
-    void OBody::ProcessActor(RE::Actor* a_actor) {
-        if (!setGameLoaded) return;
+        if (updateMorphsWithoutTimer) {
+            if (applyProcessedMorph) {
+                SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
+            }
 
-        if (!IsProcessed(a_actor)) {
-            logger::info("Processing: {}", a_actor->GetName());
-            GenerateActorBody(a_actor);
+            if (a_actor->Is3DLoaded()) {
+                morphInterface->ApplyBodyMorphs(a_actor, true);
+                morphInterface->UpdateModelWeight(a_actor, false);
+            }
+        } else {
+            auto actorName = a_actor->GetActorBase()->GetName();
+            RE::ActorHandle actorHandle = a_actor->GetHandle();
+
+            unsigned long seed = std::chrono::system_clock::now().time_since_epoch().count();
+            std::mt19937 rng(seed);
+            std::uniform_int_distribution<int> gen(3, 7);
+
+            int sleepFor = gen(rng);
+
+            // We do this to prevent stutters due to Racemenu attempting to update morphs for too many NPCs
+            std::thread([this, actorHandle, actorName, sleepFor] {
+                std::this_thread::sleep_for(std::chrono::seconds(sleepFor));
+
+                RE::Actor* actor = actorHandle.get().get();
+
+                if (actor != nullptr) {
+                    logger::info("Actor {} is valid, updating morphs now", actorName);
+
+                    SetMorph(actor, distributionKey.c_str(), "OBody", 1.0f);
+
+                    if (actor && actor->Is3DLoaded()) {
+                        morphInterface->ApplyBodyMorphs(actor, true);
+                        morphInterface->UpdateModelWeight(actor, false);
+                    }
+                } else {
+                    logger::info("Actor {} is no longer valid, not updating morphs", actorName);
+                }
+            }).detach();
         }
     }
 
     void OBody::ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
-        if (!IsProcessed(a_actor)) return;
+        if (!IsProcessed(a_actor) || IsBlacklisted(a_actor)) return;
+
+        // if ORefit is disabled and actor has ORefit morphs, clear them right away.
+        if (!setRefit && IsClotheActive(a_actor)) {
+            RemoveClothePreset(a_actor);
+            ApplyMorphs(a_actor, true);
+            return;
+        }
+
+        bool female = IsFemale(a_actor);
+
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
+
+        if ((female && presetContainer->femalePresets.size() < 1) ||
+            !female && presetContainer->malePresets.size() < 1) {
+            return;
+        }
 
         bool naked = IsNaked(a_actor, a_removingArmor, a_equippedArmor);
         bool clotheActive = IsClotheActive(a_actor);
@@ -54,351 +98,128 @@ namespace Body {
         if (clotheActive && naked) {
             logger::info("Removing clothed preset to actor {}", a_actor->GetName());
             RemoveClothePreset(a_actor);
+            ApplyMorphs(a_actor, true);
         } else if (!clotheActive && !naked && setRefit) {
             logger::info("Applying clothed preset to actor {}", a_actor->GetName());
             ApplyClothePreset(a_actor);
+            ApplyMorphs(a_actor, true);
         }
-
-        ApplyMorphs(a_actor);
-    }
-
-    void OBody::Generate() {
-        std::vector<std::string> files;
-        stl::files(root_path, files, ".xml");
-
-        auto blacklistedPresetsBegin = presetDistributionConfig["blacklistedPresetsFromRandomDistribution"].begin();
-        auto blacklistedPresetsEnd = presetDistributionConfig["blacklistedPresetsFromRandomDistribution"].end();
-
-        for (auto& entry : files) {
-            if (IsClothedSet(entry)) continue;
-
-            pugi::xml_document doc;
-            auto result = doc.load_file(entry.c_str());
-            if (!result) {
-                logger::warn("load failed: {} [{}]", entry, result.description());
-                continue;
-            }
-
-            auto presets = doc.child("SliderPresets");
-            for (auto& node : presets) {
-                auto preset = GeneratePreset(node);
-                if (!preset) continue;
-
-                if (IsFemalePreset(*preset)) {
-                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
-                        blacklistedPresetsEnd) {
-                        blacklistedFemalePresets.push_back(*preset);
-                    } else {
-                        femalePresets.push_back(*preset);
-                    }
-                } else {
-                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
-                        blacklistedPresetsEnd) {
-                        blacklistedMalePresets.push_back(*preset);
-                    } else {
-                        malePresets.push_back(*preset);
-                    }
-                }
-            }
-        }
-
-        allFemalePresets = femalePresets;
-        allFemalePresets.insert(allFemalePresets.end(), blacklistedFemalePresets.begin(),
-                                blacklistedFemalePresets.end());
-
-        allMalePresets = malePresets;
-        allMalePresets.insert(allMalePresets.end(), blacklistedMalePresets.begin(), blacklistedMalePresets.end());
-
-        logger::info("Female presets: {}", femalePresets.size());
-        logger::info("Male presets: {}", malePresets.size());
-    }
-
-    void OBody::GenerateRaceStatDB() {
-        pugi::xml_document doc;
-        auto result = doc.load_file("Data\\SKSE\\Plugins\\OBody.xml");
-        if (!result) {
-            logger::warn("Settings failed: {}", result.description());
-            return;
-        }
-
-        auto enableNode = doc.child("Enable");
-        bool enable = enableNode.attribute("Value").as_bool();
-        if (!enable) return;
-
-        auto racesNode = doc.child("Races");
-        for (auto& race : racesNode) {
-            std::string name = race.attribute("name").as_string("");
-            if (name != "") continue;
-
-            auto addStat = [&](std::string a_name, const char* a_statName) {
-                auto val = race.attribute(a_statName).as_int(-1);
-                if (val > -1) {
-                    RaceStat stat{name, a_statName, val};
-                    raceStats.push_back(std::move(stat));
-                }
-            };
-
-            addStat(name, "breasts");
-            addStat(name, "butt");
-            addStat(name, "waist");
-        }
-    }
-
-    Preset OBody::GetPresetByName(PresetSet& a_presetSet, std::string a_name) {
-        logger::info("Looking for preset: {}", a_name);
-
-        boost::trim(a_name);
-        boost::to_upper(a_name);
-
-        for (auto& preset : a_presetSet) {
-            if (stl::cmp(boost::to_upper_copy(preset.name), a_name)) return preset;
-        }
-
-        auto preset = a_presetSet.front();
-        logger::info("Preset not found");
-        logger::info("Choosing default: {}", preset.name);
-        return preset;
-    }
-
-    Preset OBody::GetRandomPreset(PresetSet& a_presetSet) {
-        std::random_device seed;
-        // generator
-        std::mt19937 engine(seed());
-        // number distribution
-        auto size = static_cast<int>(a_presetSet.size());
-        std::uniform_int_distribution<int> choose(0, size - 1);
-        return a_presetSet[choose(engine)];
-    }
-
-    Preset OBody::GetRandomPresetByName(PresetSet& a_presetSet, std::vector<std::string> a_presetNames) {
-        std::random_device seed;
-        // generator
-        std::mt19937 engine(seed());
-        // number distribution
-        auto size = static_cast<int>(a_presetNames.size());
-        std::uniform_int_distribution<int> choose(0, size - 1);
-        return GetPresetByName(a_presetSet, a_presetNames[choose(engine)]);
-    }
-
-    PresetSet OBody::SortPresetSetByRaceStat(PresetSet& a_presetSet, RaceStat& a_stat) {
-        return SortPresetSetByBodypart(a_presetSet, a_stat.bodypart);
-    }
-
-    PresetSet OBody::SortPresetSetByBodypart(PresetSet& a_presetSet, std::string a_bodypart) {
-        PresetSet ret = a_presetSet;
-
-        // Note: This can be improved
-        // One by one move boundary of unsorted subarray
-        int n = static_cast<int>(ret.size());
-        for (int i = 0; i < n - 1; i++) {
-            // Find the minimum element in unsorted array
-            int min_idx = i;
-            for (int j = i + 1; j < n; j++) {
-                auto j_scoreset = GetScoreByName(ret[j], a_bodypart);
-                auto minidx_scoreset = GetScoreByName(ret[min_idx], a_bodypart);
-
-                auto j_val = ((j_scoreset.min + j_scoreset.max) / 2);
-                auto minidx_val = ((minidx_scoreset.min + minidx_scoreset.max) / 2);
-                if (j_val < minidx_val) min_idx = j;
-            }
-            // Swap the found minimum element with the first
-            // element
-            auto temp = ret[min_idx];
-            ret[min_idx] = ret[i];
-            ret[i] = temp;
-        }
-
-        return ret;
-    }
-
-    Score OBody::GetScoreByName(Preset& a_preset, std::string a_name) {
-        for (auto& score : a_preset.scores) {
-            if (stl::cmp(score.name, a_name)) return score;
-        }
-
-        return {};
-    }
-
-    float OBody::GetPartScore(PartScoreSet& a_scoreSet, SliderSet& a_sliderSet, bool a_max = false) {
-        float ret = 0;
-        for (auto& [name, slider] : a_sliderSet) {
-            auto it = a_scoreSet.find(name);
-            if (it != a_scoreSet.end()) {
-                float mult = a_max ? slider.max : slider.min;
-                ret += static_cast<float>(it->second) * mult;
-            }
-        }
-
-        return ret;
-    }
-
-    float OBody::GetScoreByWeight(Score& a_score, float a_weight) {
-        return ((a_score.max - a_score.min) * a_weight) + a_score.min;
-    }
-
-    void OBody::SaveScoreToActor(RE::Actor* a_actor, Score& a_score, float a_weight) {
-        float val = GetScoreByWeight(a_score, a_weight);
-        auto name = "obody_score_" + a_score.name;
-        SetMorph(a_actor, name.c_str(), "OBody", val);
-    }
-
-    std::optional<Preset> OBody::GeneratePreset(pugi::xml_node& a_node) {
-        std::string name = a_node.attribute("name").value();
-
-        // Some preset names have dumb trailing whitespaces which may mess up the configuration file...
-        boost::trim(name);
-
-        if (IsClothedSet(name)) return std::nullopt;
-
-        std::string body = a_node.attribute("set").value();
-        auto sliderSet = SliderSetFromNode(a_node, GetBodyType(body));
-
-        Score breasts{"breasts"};
-        breasts.min = GetPartScore(breastScores, sliderSet);
-        breasts.max = GetPartScore(breastScores, sliderSet, true);
-
-        Score butt{"butt"};
-        butt.min = GetPartScore(buttScores, sliderSet);
-        butt.max = GetPartScore(buttScores, sliderSet, true);
-
-        Score waist{"waist"};
-        waist.min = GetPartScore(waistScores, sliderSet);
-        waist.max = GetPartScore(waistScores, sliderSet, true);
-
-        std::vector<Score> scores;
-        scores.push_back(std::move(breasts));
-        scores.push_back(std::move(butt));
-        scores.push_back(std::move(waist));
-
-        Preset preset{name, body};
-        preset.scores = std::move(scores);
-        preset.sliders = std::move(sliderSet);
-        return preset;
-    }
-
-    PresetSet OBody::GeneratePresetsByFile(std::string a_path) {
-        pugi::xml_document doc;
-        auto result = doc.load_file(a_path.c_str());
-        if (!result) {
-            logger::warn("load failed: {} [{}]", a_path, result.description());
-            return {};
-        }
-
-        PresetSet set;
-        auto presets = doc.child("SliderPresets");
-        for (auto& node : presets) {
-            auto preset = GeneratePreset(node);
-            if (preset) set.push_back(std::move(*preset));
-        }
-
-        return set;
     }
 
     void OBody::GenerateActorBody(RE::Actor* a_actor) {
-        Preset preset;
+        // The main function of OBody NG
+
+        // If actor is already processed, no need to do anything
+        if (IsProcessed(a_actor)) {
+            return;
+        }
+
         bool female = IsFemale(a_actor);
 
-        if ((female && femalePresets.size() < 1) || !female && malePresets.size() < 1) {
-            SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
+
+        // If we have no presets at all for the actor's sex, then don't do anything
+        if ((female && presetContainer->femalePresets.size() < 1) ||
+            !female && presetContainer->malePresets.size() < 1) {
             return;
         }
 
-        auto actorName = a_actor->GetActorBase()->GetName();
-        auto actorRace = a_actor->GetActorBase()->GetRace()->GetFormEditorID();
+        PresetManager::Preset preset;
 
-        logger::info("Actor race is: {}", actorRace);
+        auto jsonParser = Parser::JSONParser::GetInstance();
 
-        if (IsStringInJsonConfigKey(actorName, "blacklistedNpcs") ||
-            IsStringInJsonConfigKey(actorRace, "blacklistedRaces")) {
-            SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
+        auto actorBase = a_actor->GetActorBase();
+        auto actorName = actorBase->GetName();
+        auto actorID = actorBase->GetFormID();
+
+        logger::info("Trying to find and apply preset to {}", actorName);
+
+        // If NPC is blacklisted, set him as processed
+        if (jsonParser->IsNPCBlacklisted(actorName, actorID)) {
+            SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
+            SetMorph(a_actor, "obody_blacklisted", "OBody", 1.0f);
             return;
         }
 
-        if (presetDistributionConfig.contains("npc") && presetDistributionConfig["npc"].contains(actorName)) {
-            preset = GetRandomPresetByName(female ? allFemalePresets : allMalePresets,
-                                           presetDistributionConfig["npc"][actorName]);
-        }
+        // First, we attempt to get the NPC's preset from the keys npcFormID and npc from the JSON
+        preset = jsonParser->GetNPCPreset(actorName, actorID, female);
 
-        else if (female && presetDistributionConfig.contains("raceFemale") &&
-                 presetDistributionConfig["raceFemale"].contains(actorRace)) {
-            preset = GetRandomPresetByName(allFemalePresets, presetDistributionConfig["raceFemale"][actorRace]);
-        }
+        if (preset.name.size() == 0) {
+            auto actorRace = actorBase->GetRace()->GetFormEditorID();
 
-        else if (!female && presetDistributionConfig.contains("raceMale") &&
-                 presetDistributionConfig["raceMale"].contains(actorRace)) {
-            preset = GetRandomPresetByName(allMalePresets, presetDistributionConfig["raceMale"][actorRace]);
-        }
-
-        else if (female) {
-            if (raceStats.size() > 0) {
-                auto stat = GetCorrespondingRaceStat(a_actor);
-                if (stat.value > -1) {
-                    auto sortedDB = SortPresetSetByRaceStat(femalePresets, stat);
-                    int dbSize = static_cast<int>(sortedDB.size());
-                    int start = (dbSize - 1) * static_cast<int>((static_cast<float>(stat.value) / 10.0f));
-                    int range = dbSize / 3;
-                    int min = start - range;
-                    int max = start + range;
-
-                    if (min < 0) min = 0;
-
-                    if (max > dbSize - 1) max = dbSize - 1;
-
-                    int finalPreset = stl::random(min, max);
-                    preset = sortedDB[finalPreset];
-                } else {
-                    preset = GetRandomPreset(femalePresets);
-                }
-            } else {
-                preset = GetRandomPreset(femalePresets);
+            // if we can't find it, we check if the NPC is blacklisted by plugin name or by race
+            if (jsonParser->IsNPCBlacklistedGlobally(a_actor, actorRace, female)) {
+                SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
+                SetMorph(a_actor, "obody_blacklisted", "OBody", 1.0f);
+                return;
             }
-        } else {
-            preset = GetRandomPreset(malePresets);
+
+            // Next up, we check if we have a preset defined in one of the NPC's factions
+            preset = jsonParser->GetNPCFactionPreset(actorBase, female);
+
+            // If that also fails, we check if we have a preset in the NPC's plugin
+            if (preset.name.size() == 0) {
+                preset = jsonParser->GetNPCPluginPreset(actorBase, actorName, female);
+            }
+
+            // And if that also fails, we check if we have a preset in the NPC's race
+            if (preset.name.size() == 0) {
+                preset = jsonParser->GetNPCRacePreset(actorRace, female);
+            }
         }
 
-        GenerateBodyByPreset(a_actor, preset);
-        SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
-        OnActorGenerated.SendEvent(a_actor, preset.name);
-    }
+        // If we got here without a preset, then we just fetch one randomly
+        if (preset.name.size() == 0) {
+            logger::info("No preset defined for this actor, getting it randomly");
+            if (female) {
+                preset = PresetManager::GetRandomPreset(presetContainer->femalePresets);
+            } else {
+                preset = PresetManager::GetRandomPreset(presetContainer->malePresets);
+            }
+        }
 
-    void OBody::GenerateBodyByFile(RE::Actor* a_actor, std::string a_path) {
-        auto set = GeneratePresetsByFile(a_path);
-        GenerateBodyByPreset(a_actor, set.front());
+        logger::info("Preset {} will be applied to {}", preset.name, actorName);
+
+        GenerateBodyByPreset(a_actor, preset, false);
     }
 
     void OBody::GenerateBodyByName(RE::Actor* a_actor, std::string a_name) {
-        // do not send this an invalid name, you have been warned
-        Preset preset;
-        if (IsFemale(a_actor))
-            preset = GetPresetByName(allFemalePresets, a_name);
-        else
-            preset = GetPresetByName(allMalePresets, a_name);
+        PresetManager::Preset preset;
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
 
-        GenerateBodyByPreset(a_actor, preset);
+        if (IsFemale(a_actor))
+            preset = PresetManager::GetPresetByName(presetContainer->allFemalePresets, a_name, true);
+        else
+            preset = PresetManager::GetPresetByName(presetContainer->allMalePresets, a_name, false);
+
+        GenerateBodyByPreset(a_actor, preset, true);
     }
 
-    void OBody::GenerateBodyByPreset(RE::Actor* a_actor, Preset& a_preset) {
+    void OBody::GenerateBodyByPreset(RE::Actor* a_actor, PresetManager::Preset& a_preset,
+                                     bool updateMorphsWithoutTimer) {
+        // Start by clearing any previous OBody morphs
         morphInterface->ClearMorphs(a_actor);
-        ApplyPreset(a_actor, a_preset);
+
+        // Apply the preset's sliders
+        ApplySliderSet(a_actor, a_preset.sliders, "OBody");
 
         logger::info("Applying preset: {}", a_preset.name);
-        for (auto& score : a_preset.scores) {
-            float weight = GetWeight(a_actor);
-            SaveScoreToActor(a_actor, score, weight);
-        }
 
         if (IsFemale(a_actor)) {
+            // Generate random nipple sliders if needed
             if (setNippleRand) {
-                SliderSet set = GenerateRandomNippleSliders();
+                PresetManager::SliderSet set = GenerateRandomNippleSliders();
                 ApplySliderSet(a_actor, set, "OBody");
             }
 
             if (setGenitalRand) {
-                SliderSet set = GenerateRandomGenitalSliders();
+                // Generate random genital sliders if needed
+                PresetManager::SliderSet set = GenerateRandomGenitalSliders();
                 ApplySliderSet(a_actor, set, "OBody");
             }
         }
 
+        // If not naked and if ORefit is turned on, apply ORefit morphing
         if (!IsNaked(a_actor, false, nullptr)) {
             if (setRefit) {
                 logger::info("Not naked, adding cloth preset");
@@ -409,12 +230,82 @@ namespace Body {
             OnActorNaked.SendEvent(a_actor);
         }
 
-        ApplyMorphs(a_actor);
-        SetMorph(a_actor, "obody_processed", "OBody", 1.0f);
+        ApplyMorphs(a_actor, updateMorphsWithoutTimer);
+        OnActorGenerated.SendEvent(a_actor, a_preset.name);
     }
 
-    SliderSet OBody::GenerateRandomNippleSliders() {
-        SliderSet set;
+    void OBody::ApplySlider(RE::Actor* a_actor, PresetManager::Slider& a_slider, const char* a_key, float a_weight) {
+        float val = ((a_slider.max - a_slider.min) * a_weight) + a_slider.min;
+        morphInterface->SetMorph(a_actor, a_slider.name.c_str(), a_key, val);
+    }
+
+    void OBody::ApplySliderSet(RE::Actor* a_actor, PresetManager::SliderSet& a_sliders, const char* a_key) {
+        float weight = GetWeight(a_actor);
+        for (auto& [name, slider] : a_sliders) ApplySlider(a_actor, slider, a_key, weight);
+    }
+
+    void OBody::ApplyClothePreset(RE::Actor* a_actor) {
+        auto set = GenerateClotheSliders(a_actor);
+        ApplySliderSet(a_actor, set, "OClothe");
+    }
+
+    void OBody::ClearActorMorphs(RE::Actor* a_actor) {
+        morphInterface->ClearBodyMorphKeys(a_actor, "OBody");
+        morphInterface->ClearBodyMorphKeys(a_actor, "OClothe");
+        ApplyMorphs(a_actor, true, false);
+    }
+
+    void OBody::RemoveClothePreset(RE::Actor* a_actor) { morphInterface->ClearBodyMorphKeys(a_actor, "OClothe"); }
+
+    float OBody::GetWeight(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetWeight() / 100.0f; }
+
+    bool OBody::IsClotheActive(RE::Actor* a_actor) { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }
+
+    bool OBody::IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
+        auto jsonParser = Parser::JSONParser::GetInstance();
+
+        auto outfitBody = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody);
+        auto outergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary);
+        auto undergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary);
+
+        // When the TES EquipEvent is sent, the inventory isn't updated yet
+        // So we have to check if any of these armors is being removed...
+        if (a_removingArmor) {
+            if (outfitBody == a_equippedArmor) {
+                outfitBody = nullptr;
+            } else if (outergarmentChest == a_equippedArmor) {
+                outergarmentChest = nullptr;
+            } else if (undergarmentChest == a_equippedArmor) {
+                undergarmentChest = nullptr;
+            }
+        }
+
+        // if outfit is blacklisted from ORefit, we assume as not having the outfit so ORefit is not applied
+        bool hasBodyOutfit = outfitBody == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*outfitBody);
+        bool hasOutergarment =
+            outergarmentChest == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*outergarmentChest);
+        bool hasUndergarment =
+            undergarmentChest == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*undergarmentChest);
+
+        // Actor counts as naked if:
+        // he has no clothing in the slots defined above / they are blacklisted from ORefit
+        // if the items in the outfitsForceRefit key are not equipped
+        return !hasBodyOutfit && !hasOutergarment && !hasUndergarment &&
+               !jsonParser->IsAnyForceRefitItemEquipped(a_actor, a_removingArmor, a_equippedArmor);
+    }
+
+    bool OBody::IsFemale(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetSex() == 1; }
+
+    bool OBody::IsProcessed(RE::Actor* a_actor) {
+        return morphInterface->HasBodyMorph(a_actor, distributionKey.c_str(), "OBody");
+    }
+
+    bool OBody::IsBlacklisted(RE::Actor* a_actor) {
+        return morphInterface->HasBodyMorph(a_actor, "obody_blacklisted", "OBody");
+    }
+
+    PresetManager::SliderSet OBody::GenerateRandomNippleSliders() {
+        PresetManager::SliderSet set;
 
         if (stl::chance(15))
             AddSliderToSet(set, Slider{"AreolaSize", stl::random(-1.0f, 0.0f)});
@@ -452,8 +343,8 @@ namespace Body {
         return set;
     }
 
-    SliderSet OBody::GenerateRandomGenitalSliders() {
-        SliderSet set;
+    PresetManager::SliderSet OBody::GenerateRandomGenitalSliders() {
+        PresetManager::SliderSet set;
 
         if (stl::chance(20)) {
             // innie
@@ -538,8 +429,8 @@ namespace Body {
         return set;
     }
 
-    SliderSet OBody::GenerateClotheSliders(RE::Actor* a_actor) {
-        SliderSet set;
+    PresetManager::SliderSet OBody::GenerateClotheSliders(RE::Actor* a_actor) {
+        PresetManager::SliderSet set;
         // breasts
         // make area on sides behind breasts not sink in
         AddSliderToSet(set, DeriveSlider(a_actor, "BreastSideShape", 0.0f));
@@ -588,231 +479,20 @@ namespace Body {
         AddSliderToSet(set, DeriveSlider(a_actor, "AreolaSize", -0.3f));
         // flatten nipple
         AddSliderToSet(set, DeriveSlider(a_actor, "NipBGone", 1.0f));
-        AddSliderToSet(set, DeriveSlider(a_actor, "NippleManga", -0.75f));
-        // push nipples together
+        // AddSliderToSet(set, DeriveSlider(a_actor, "NippleManga", -0.75f));
+        //  push nipples together
         AddSliderToSet(set, Slider{"NippleDistance", 0.05f, 0.08f});
         // Lift large breasts up
         AddSliderToSet(set, Slider{"NippleDown", 0.0f, -0.1f});
         // Flatten nipple + areola
         AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkManga", -0.25f));
         // Flatten nipple
-        AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkiness", 0.0f));
+        // AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkiness", 0.0f));
 
         return set;
     }
 
-    RaceStat OBody::GetCorrespondingRaceStat(RE::Actor* a_actor) {
-        auto raceName = a_actor->GetActorBase()->GetRace()->GetName();
-        for (auto& stat : raceStats)
-            if (stl::cmp(stat.name, raceName)) return stat;
-
-        return {};
-    }
-
-    SliderSet OBody::SliderSetFromNode(pugi::xml_node& a_node, BodyType a_body) {
-        SliderSet ret;
-        for (auto& node : a_node) {
-            if (!stl::cmp(node.name(), "SetSlider")) continue;
-
-            std::string name = node.attribute("name").value();
-
-            bool inverted = false;
-            if (a_body == BodyType::UNP) {
-                if (DefaultSliders.contains(name)) inverted = true;
-            }
-
-            float min{0}, max{0};
-            float val = node.attribute("value").as_float() / 100.0f;
-            auto size = node.attribute("size").value();
-            if (stl::cmp(size, "big"))
-                max = inverted ? 1.0f - val : val;
-            else
-                min = inverted ? 1.0f - val : val;
-
-            Slider slider{name, min, max};
-            AddSliderToSet(ret, slider, inverted);
-        }
-
-        return ret;
-    }
-
-    void OBody::AddSliderToSet(SliderSet& a_sliderSet, Slider a_slider, [[maybe_unused]] bool a_inverted) {
-        float val = 0;
-        auto it = a_sliderSet.find(a_slider.name);
-        if (it != a_sliderSet.end()) {
-            auto& current = it->second;
-            if ((current.min == val) && (a_slider.min != val)) current.min = a_slider.min;
-            if ((current.max == val) && (a_slider.max != val)) current.max = a_slider.max;
-        } else {
-            a_sliderSet[a_slider.name] = std::move(a_slider);
-        }
-    }
-
-    void OBody::ApplySlider(RE::Actor* a_actor, Slider& a_slider, const char* a_key, float a_weight) {
-        float val = ((a_slider.max - a_slider.min) * a_weight) + a_slider.min;
-        SetMorph(a_actor, a_slider.name.c_str(), a_key, val);
-    }
-
-    void OBody::ApplySliderSet(RE::Actor* a_actor, SliderSet& a_sliders, const char* a_key) {
-        float weight = GetWeight(a_actor);
-        for (auto& [name, slider] : a_sliders) ApplySlider(a_actor, slider, a_key, weight);
-    }
-
-    void OBody::ApplyPreset(RE::Actor* a_actor, Preset& a_preset) {
-        ApplySliderSet(a_actor, a_preset.sliders, "OBody");
-        PrintPreset(a_preset);
-    }
-
-    void OBody::ApplyClothePreset(RE::Actor* a_actor) {
-        auto set = GenerateClotheSliders(a_actor);
-        ApplySliderSet(a_actor, set, "OClothe");
-    }
-
-    void OBody::RemoveClothePreset(RE::Actor* a_actor) { morphInterface->ClearBodyMorphKeys(a_actor, "OClothe"); }
-
     Slider OBody::DeriveSlider(RE::Actor* a_actor, const char* a_morph, float a_target) {
         return Slider{a_morph, a_target - GetMorph(a_actor, a_morph)};
-    }
-
-    BodyType OBody::GetBodyType(std::string a_body) {
-        std::vector<std::string> unp{"unp", "coco"};
-        return stl::contains(a_body, unp) ? BodyType::UNP : BodyType::CBBE;
-    }
-
-    float OBody::GetWeight(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetWeight() / 100.0f; }
-
-    bool OBody::IsClothedSet(std::string& a_set) {
-        std::string presetName = a_set;
-
-        std::vector<std::string> clothed{"cloth", "outfit", "nevernude", "bikini", "feet",
-                                         "hands", "push",   "cleavage",  "armor"};
-
-        std::transform(presetName.begin(), presetName.end(), presetName.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-
-        return stl::contains(presetName, clothed);
-    }
-
-    bool OBody::IsZeroedPreset(std::string& a_set) {
-        std::string presetName = a_set;
-
-        std::transform(presetName.begin(), presetName.end(), presetName.begin(),
-                       [](unsigned char c) { return std::tolower(c); });
-
-        return (presetName.find("zeroed") != std::string::npos);
-    }
-
-    bool OBody::IsClotheActive(RE::Actor* a_actor) { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }
-
-    bool OBody::IsOutfitBlacklisted(std::string a_outfit) {
-        return a_outfit.empty() || IsStringInJsonConfigKey(a_outfit, "blacklistedOutfitsFromORefit");
-    }
-
-    bool OBody::IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
-        auto outfitBody = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody);
-        auto outergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary);
-        auto undergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary);
-
-        // When the TES EquipEvent is sent, the inventory isn't updated yet
-        // So we have to check if any of these armors is being removed...
-        if (a_removingArmor) {
-            if (outfitBody == a_equippedArmor) {
-                outfitBody = nullptr;
-            } else if (outergarmentChest == a_equippedArmor) {
-                outergarmentChest = nullptr;
-            } else if (undergarmentChest == a_equippedArmor) {
-                undergarmentChest = nullptr;
-            }
-        }
-
-        bool isActorNaked = false;
-
-        std::string outfitBodyName = outfitBody ? outfitBody->GetName() : "";
-        std::string outergarmentChestName = outergarmentChest ? outergarmentChest->GetName() : "";
-        std::string undergarmentChestName = undergarmentChest ? undergarmentChest->GetName() : "";
-
-        // if outfit is blacklisted from ORefit, we assume as not having the outfit so ORefit is not applied
-        bool hasBodyOutfit = IsOutfitBlacklisted(outfitBodyName);
-        bool hasOutergarment = IsOutfitBlacklisted(outergarmentChestName);
-        bool hasUndergarment = IsOutfitBlacklisted(undergarmentChestName);
-
-        // Actor counts as naked if:
-        // he has no clothing in the slots defined above / they are blacklisted from ORefit
-        // if the items in the outfitsForceRefit key are not equipped
-        return hasBodyOutfit && hasOutergarment && hasUndergarment &&
-               !IsAnyForceRefitItemEquipped(a_actor, a_removingArmor, a_equippedArmor);
-    }
-
-    bool OBody::IsFemale(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetSex() == 1; }
-
-    bool OBody::IsFemalePreset(Preset& a_preset) {
-        std::vector<std::string> body{"himbo", "talos"};
-        return !stl::contains(a_preset.body, body);
-    }
-
-    bool OBody::IsProcessed(RE::Actor* a_actor) { return GetMorph(a_actor, "obody_processed") == 1.0f; }
-
-    bool OBody::IsStringInJsonConfigKey(std::string a_value, std::string key) {
-        boost::trim(a_value);
-
-        return presetDistributionConfig.contains(key) &&
-               std::find(presetDistributionConfig[key].begin(), presetDistributionConfig[key].end(), a_value) !=
-                   presetDistributionConfig[key].end();
-    }
-
-    bool OBody::IsAnyForceRefitItemEquipped(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
-        auto inventory = a_actor->GetInventory();
-
-        std::vector<std::string> wornItems;
-
-        for (auto const& item : inventory) {
-            if (item.second.second->IsWorn()) {
-                // Check if the item is being unequipped or not first
-                if (a_removingArmor && item.first->GetFormID() == a_equippedArmor->GetFormID()) {
-                    continue;
-                }
-
-                RE::FormType itemFormType = item.first->GetFormType();
-
-                if ((itemFormType == RE::FormType::Armor || itemFormType == RE::FormType::Armature) &&
-                    IsStringInJsonConfigKey(item.second.second->GetDisplayName(), "outfitsForceRefit")) {
-                    logger::info("Outfit {} is in force refit list", item.second.second->GetDisplayName());
-
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    void OBody::PrintSliderSet(SliderSet& a_sliderSet) {
-        logger::info(" > Sliders:");
-        for (auto& [name, slider] : a_sliderSet) {
-            logger::info("   > {}: [Small: {}] [Big: {}]", name, slider.min, slider.max);
-        }
-    }
-
-    void OBody::PrintPreset(Preset& a_preset) {
-        logger::info("[{}]", a_preset.name);
-        logger::info(" > Body: {}", a_preset.body);
-
-        logger::info(" > Scores:");
-        for (auto& score : a_preset.scores)
-            logger::info("   > {} : [Min: {}] [Max: {}]", score.name, score.min, score.max);
-
-        PrintSliderSet(a_preset.sliders);
-    }
-
-    void OBody::PrintDatabase() {
-        logger::info("Printing female presets");
-        for (auto& preset : femalePresets) {
-            PrintPreset(preset);
-        }
-
-        logger::info("Printing male presets");
-        for (auto& preset : malePresets) {
-            PrintPreset(preset);
-        }
     }
 }  // namespace Body

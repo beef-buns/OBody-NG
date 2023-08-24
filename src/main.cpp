@@ -3,6 +3,8 @@
 #include "Body/Body.h"
 #include "Body/Event.h"
 #include "Papyrus/Papyrus.h"
+#include "JSONParser/JSONParser.h"
+#include "PresetManager/PresetManager.h"
 #include "SKEE.h"
 
 using namespace RE::BSScript;
@@ -45,7 +47,10 @@ namespace {
     }
 
     void MessageHandler(SKSE::MessagingInterface::Message* a_msg) {
+        auto obody = Body::OBody::GetInstance();
+
         switch (a_msg->type) {
+            // On kPostPostLoad, we can try to fetch the Racemenu interface
             case SKSE::MessagingInterface::kPostPostLoad: {
                 SKEE::InterfaceExchangeMessage msg;
                 auto intfc = SKSE::GetMessagingInterface();
@@ -64,14 +69,69 @@ namespace {
                 }
 
                 logger::info("BodyMorph Version {}", morphInterface->GetVersion());
-                auto obody = Body::OBody::GetInstance();
                 if (!obody->SetMorphInterface(morphInterface)) logger::info("BodyMorphInterace not provided");
 
-                obody->setGameLoaded = false;
-                obody->Generate();
+                return;
+            }
 
+            // When data is all loaded (this is by the time the Main Menu is visible), we can parse the JSON and the
+            // Bodyslide presets
+            case SKSE::MessagingInterface::kDataLoaded: {
+                auto parser = Parser::JSONParser::GetInstance();
+
+                std::ifstream f(L"Data/SKSE/Plugins/OBody_presetDistributionConfig.json");
+
+                try {
+                    parser->presetDistributionConfig = nlohmann::ordered_json::parse(f);
+                    parser->ProcessJSONCategories();
+                    parser->presetDistributionConfigValid = true;
+                } catch (const std::runtime_error& re) {
+                    log::info("{} ", re.what());
+                    parser->presetDistributionConfigValid = false;
+                } catch (const std::exception& ex) {
+                    log::info("{} ", ex.what());
+                    parser->presetDistributionConfigValid = false;
+                } catch (...) {
+                    log::info("An unknown error has occurred while parsing the JSON file.");
+                    parser->presetDistributionConfigValid = false;
+                }
+
+                try {
+                    PresetManager::GeneratePresets();
+                    parser->bodyslidePresetsParsingValid = true;
+                } catch (const std::runtime_error& re) {
+                    log::info("{} ", re.what());
+                    parser->bodyslidePresetsParsingValid = false;
+                } catch (const std::exception& ex) {
+                    log::info("{} ", ex.what());
+                    parser->bodyslidePresetsParsingValid = false;
+                } catch (...) {
+                    log::info("An unknown error has occurred while parsing the bodyslide presets files.");
+                    parser->bodyslidePresetsParsingValid = false;
+                }
+
+                if (parser->presetDistributionConfigValid) {
+                    log::info("OBody has finished parsing the JSON config file.");
+                } else {
+                    log::info("There are errors in the OBody JSON config file! OBody will not work properly.");
+                }
+
+                return;
+            }
+
+            // We can only register for events after the game is loaded
+            // The game doesn't send a Load game event on new game, so we need to listen for this one in specific
+            case SKSE::MessagingInterface::kNewGame: {
+                log::info("New Game started");
                 Event::Register();
-            } break;
+                return;
+            }
+
+            case SKSE::MessagingInterface::kPostLoadGame: {
+                log::info("Game finished loading");
+                Event::Register();
+                return;
+            }
         }
     }
 }  // namespace
@@ -84,12 +144,6 @@ SKSEPluginLoad(const SKSE::LoadInterface* a_skse) {
     log::info("{} {} is loading...", plugin->GetName(), version);
 
     Init(a_skse);
-
-	auto obody = Body::OBody::GetInstance();
-    std::ifstream f(L"Data/SKSE/Plugins/OBody_presetDistributionConfig.json");
-    obody->presetDistributionConfig = json::parse(f);
-
-	log::info("OBody has finished parsing the JSON config file.");
 
     auto message = SKSE::GetMessagingInterface();
     if (!message->RegisterListener(MessageHandler)) return false;

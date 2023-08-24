@@ -1,44 +1,9 @@
 #pragma once
 
 #include "Body/Body.h"
+#include "JSONParser/JSONParser.h"
 
 namespace Event {
-    using EventResult = RE::BSEventNotifyControl;
-
-    class ObjectLoadedEventHandler : public RE::BSTEventSink<RE::TESObjectLoadedEvent> {
-    public:
-        static ObjectLoadedEventHandler* GetSingleton() {
-            static ObjectLoadedEventHandler singleton;
-            return &singleton;
-        }
-
-        virtual EventResult ProcessEvent(const RE::TESObjectLoadedEvent* a_event,
-                                         RE::BSTEventSource<RE::TESObjectLoadedEvent>*) {
-            if (!a_event || !a_event->loaded) return EventResult::kContinue;
-
-            auto actor = RE::TESObjectREFR::LookupByID<RE::Actor>(a_event->formID);
-
-            if (actor) {
-                if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
-                    logger::info("Obj load {} appeared", actor->GetName());
-                    auto obody = Body::OBody::GetInstance();
-                    obody->ProcessActor(actor);
-                }
-            }
-
-            return EventResult::kContinue;
-        }
-
-    private:
-        ObjectLoadedEventHandler() = default;
-        ObjectLoadedEventHandler(const ObjectLoadedEventHandler&) = delete;
-        ObjectLoadedEventHandler(ObjectLoadedEventHandler&&) = delete;
-        virtual ~ObjectLoadedEventHandler() = default;
-
-        ObjectLoadedEventHandler& operator=(const ObjectLoadedEventHandler&) = delete;
-        ObjectLoadedEventHandler& operator=(ObjectLoadedEventHandler&&) = delete;
-    };
-
     class InitScriptEventHandler : public RE::BSTEventSink<RE::TESInitScriptEvent> {
     public:
         static InitScriptEventHandler* GetSingleton() {
@@ -46,21 +11,17 @@ namespace Event {
             return &singleton;
         }
 
-        virtual EventResult ProcessEvent(const RE::TESInitScriptEvent* a_event,
-                                         RE::BSTEventSource<RE::TESInitScriptEvent>*) {
-            if (!a_event || !a_event->objectInitialized->Is3DLoaded()) return EventResult::kContinue;
+        virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESInitScriptEvent* a_event,
+                                                      RE::BSTEventSource<RE::TESInitScriptEvent>*) {
+            if (!a_event || !a_event->objectInitialized->Is3DLoaded()) return RE::BSEventNotifyControl::kContinue;
 
             RE::Actor* actor = a_event->objectInitialized->As<RE::Actor>();
 
-            if (actor) {
-                if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
-                    logger::info("Script init {} appeared", actor->GetName());
-                    auto obody = Body::OBody::GetInstance();
-                    obody->ProcessActor(actor);
-                }
+            if (actor && actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
+                obody->GenerateActorBody(actor);
             }
 
-            return EventResult::kContinue;
+            return RE::BSEventNotifyControl::kContinue;
         }
 
     private:
@@ -68,6 +29,8 @@ namespace Event {
         InitScriptEventHandler(const InitScriptEventHandler&) = delete;
         InitScriptEventHandler(InitScriptEventHandler&&) = delete;
         virtual ~InitScriptEventHandler() = default;
+
+        Body::OBody* obody = Body::OBody::GetInstance();
 
         InitScriptEventHandler& operator=(const InitScriptEventHandler&) = delete;
         InitScriptEventHandler& operator=(InitScriptEventHandler&&) = delete;
@@ -80,16 +43,28 @@ namespace Event {
             return &singleton;
         }
 
-        virtual EventResult ProcessEvent(const RE::TESLoadGameEvent* a_event,
-                                         RE::BSTEventSource<RE::TESLoadGameEvent>*) {
-            if (!a_event) return EventResult::kContinue;
+        virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESLoadGameEvent* a_event,
+                                                      RE::BSTEventSource<RE::TESLoadGameEvent>*) {
+            if (!a_event) return RE::BSEventNotifyControl::kContinue;
 
-            logger::info("GameLoaded");
+            auto parser = Parser::JSONParser::GetInstance();
 
-            auto obody = Body::OBody::GetInstance();
-            obody->setGameLoaded = true;
+            if (!parser->presetDistributionConfigValid) {
+                RE::DebugMessageBox(
+                    "The OBody NG JSON configuration file contains errors! OBody NG will not work properly. Please "
+                    "exit the game now and refer to the OBody NG JSON Configuration Guide to validate your "
+                    "configuration file.");
+            }
 
-            return EventResult::kContinue;
+            if (!parser->bodyslidePresetsParsingValid) {
+                RE::DebugMessageBox(
+                    "A critical error has occurred while parsing the Bodyslide presets files. This most likely means "
+                    "you have a corrupt bodyslide preset, or a bodyslide preset where the name contains "
+                    "special/incompatible characters. As a result, the presets list in the OBody menu will be empty. "
+                    "Please exit the game now and refer to the OBody NG mod page for more information.");
+            }
+
+            return RE::BSEventNotifyControl::kContinue;
         }
 
     private:
@@ -109,21 +84,23 @@ namespace Event {
             return &singleton;
         }
 
-        virtual EventResult ProcessEvent(const RE::TESEquipEvent* a_event, RE::BSTEventSource<RE::TESEquipEvent>*) {
+        virtual RE::BSEventNotifyControl ProcessEvent(const RE::TESEquipEvent* a_event,
+                                                      RE::BSTEventSource<RE::TESEquipEvent>*) {
             auto actor = a_event->actor->As<RE::Actor>();
-            if (!a_event || !actor) return EventResult::kContinue;
+
+            if (!a_event || !actor) return RE::BSEventNotifyControl::kContinue;
 
             auto form = RE::TESForm::LookupByID(a_event->baseObject);
-            if (!form) return EventResult::kContinue;
+
+            if (!form) return RE::BSEventNotifyControl::kContinue;
 
             if (form->Is(RE::FormType::Armor) || form->Is(RE::FormType::Armature)) {
                 if (actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
-                    auto obody = Body::OBody::GetInstance();
                     obody->ProcessActorEquipEvent(actor, !a_event->equipped, form);
                 }
             }
 
-            return EventResult::kContinue;
+            return RE::BSEventNotifyControl::kContinue;
         }
 
     private:
@@ -131,6 +108,8 @@ namespace Event {
         EquipEventHandler(const EquipEventHandler&) = delete;
         EquipEventHandler(EquipEventHandler&&) = delete;
         virtual ~EquipEventHandler() = default;
+
+        Body::OBody* obody = Body::OBody::GetInstance();
 
         EquipEventHandler& operator=(const EquipEventHandler&) = delete;
         EquipEventHandler& operator=(EquipEventHandler&&) = delete;

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Body/Body.h"
+#include "JSONParser/JSONParser.h"
+#include "PresetManager/PresetManager.h"
 
 namespace PapyrusBody {
     using VM = RE::BSScript::IVirtualMachine;
@@ -25,14 +27,19 @@ namespace PapyrusBody {
         obody->setGenitalRand = a_enabled;
     }
 
-    int GetFemaleDatabaseSize(RE::StaticFunctionTag*) {
+    void SetDistributionKey(RE::StaticFunctionTag*, std::string a_distributionKey) {
         auto obody = Body::OBody::GetInstance();
-        return static_cast<int>(obody->femalePresets.size());
+        obody->distributionKey = a_distributionKey;
+    }
+
+    int GetFemaleDatabaseSize(RE::StaticFunctionTag*) {
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
+        return static_cast<int>(presetContainer->femalePresets.size());
     }
 
     int GetMaleDatabaseSize(RE::StaticFunctionTag*) {
-        auto obody = Body::OBody::GetInstance();
-        return static_cast<int>(obody->malePresets.size());
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
+        return static_cast<int>(presetContainer->malePresets.size());
     }
 
     void RegisterForOBodyEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest) {
@@ -43,11 +50,6 @@ namespace PapyrusBody {
         Body::OnActorNaked.Register(a_quest);
     }
 
-    void ApplyPresetByFile(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_path) {
-        auto obody = Body::OBody::GetInstance();
-        obody->GenerateBodyByFile(a_actor, a_path);
-    }
-
     void ApplyPresetByName(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_name) {
         auto obody = Body::OBody::GetInstance();
         obody->GenerateBodyByName(a_actor, a_name);
@@ -56,12 +58,19 @@ namespace PapyrusBody {
     void AddClothesOverlay(RE::StaticFunctionTag*, RE::Actor* a_actor) {
         auto obody = Body::OBody::GetInstance();
         obody->ApplyClothePreset(a_actor);
-        obody->ApplyMorphs(a_actor);
+        obody->ApplyMorphs(a_actor, true);
+    }
+
+    void ResetActorOBodyMorphs(RE::StaticFunctionTag*, RE::Actor* a_actor) {
+        auto obody = Body::OBody::GetInstance();
+        obody->ClearActorMorphs(a_actor);
     }
 
     auto GetAllPossiblePresets(RE::StaticFunctionTag*, RE::Actor* a_actor) {
         std::vector<RE::BSFixedString> ret;
+        auto presetContainer = PresetManager::PresetContainer::GetInstance();
         auto obody = Body::OBody::GetInstance();
+        auto presetDistributionConfig = Parser::JSONParser::GetInstance()->presetDistributionConfig;
 
         bool showBlacklistedPresets = false;
 
@@ -69,8 +78,8 @@ namespace PapyrusBody {
         // Also happens when used with Immersive Equipment displays. I have no idea why.
         // Catch the error, default to True in case something fails
         try {
-            showBlacklistedPresets = obody->presetDistributionConfig.contains("blacklistedPresetsShowInOBodyMenu") &&
-                                     obody->presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"];
+            showBlacklistedPresets = presetDistributionConfig.contains("blacklistedPresetsShowInOBodyMenu") &&
+                                     presetDistributionConfig["blacklistedPresetsShowInOBodyMenu"];
         } catch (json::type_error) {
             logger::info(
                 "Failed to read blacklistedPresetsShowInOBodyMenu key. Defaulting to showing the blacklisted presets "
@@ -80,15 +89,15 @@ namespace PapyrusBody {
 
         if (obody->IsFemale(a_actor)) {
             if (showBlacklistedPresets) {
-                for (auto& preset : obody->allFemalePresets) ret.push_back(preset.name);
+                for (auto& preset : presetContainer->allFemalePresets) ret.push_back(preset.name);
             } else {
-                for (auto& preset : obody->femalePresets) ret.push_back(preset.name);
+                for (auto& preset : presetContainer->femalePresets) ret.push_back(preset.name);
             }
         } else {
             if (showBlacklistedPresets) {
-                for (auto& preset : obody->allMalePresets) ret.push_back(preset.name);
+                for (auto& preset : presetContainer->allMalePresets) ret.push_back(preset.name);
             } else {
-                for (auto& preset : obody->malePresets) ret.push_back(preset.name);
+                for (auto& preset : presetContainer->malePresets) ret.push_back(preset.name);
             }
         }
 
@@ -99,7 +108,6 @@ namespace PapyrusBody {
         const auto obj = "OBodyNative"sv;
 
         BIND(GenActor);
-        BIND(ApplyPresetByFile);
         BIND(ApplyPresetByName);
         BIND(GetAllPossiblePresets);
         BIND(AddClothesOverlay);
@@ -107,10 +115,12 @@ namespace PapyrusBody {
         BIND(RegisterForOBodyNakedEvent);
         BIND(GetFemaleDatabaseSize);
         BIND(GetMaleDatabaseSize);
+        BIND(ResetActorOBodyMorphs);
 
         BIND(SetORefit);
         BIND(SetNippleRand);
         BIND(SetGenitalRand);
+        BIND(SetDistributionKey);
 
         return true;
     }
