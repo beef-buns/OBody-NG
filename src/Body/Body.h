@@ -47,6 +47,7 @@ namespace Body {
         bool setRefit = true;
         bool setNippleRand = true;
         bool setGenitalRand = true;
+        bool setPerformanceMode = true;
 
         std::string distributionKey;
 

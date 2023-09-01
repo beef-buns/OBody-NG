@@ -27,6 +27,11 @@ namespace PapyrusBody {
         obody->setGenitalRand = a_enabled;
     }
 
+    void SetPerformanceMode(RE::StaticFunctionTag*, bool a_enabled) {
+        auto obody = Body::OBody::GetInstance();
+        obody->setPerformanceMode = a_enabled;
+    }
+
     void SetDistributionKey(RE::StaticFunctionTag*, std::string a_distributionKey) {
         auto obody = Body::OBody::GetInstance();
         obody->distributionKey = a_distributionKey;
@@ -120,6 +125,7 @@ namespace PapyrusBody {
         BIND(SetORefit);
         BIND(SetNippleRand);
         BIND(SetGenitalRand);
+        BIND(SetPerformanceMode);
         BIND(SetDistributionKey);
 
         return true;

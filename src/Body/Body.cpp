@@ -26,19 +26,25 @@ namespace Body {
     void OBody::ApplyMorphs(RE::Actor* a_actor, bool updateMorphsWithoutTimer, bool applyProcessedMorph) {
         // If updateMorphsWithoutTimer is true, OBody NG will call the ApplyBodyMorphs function without waiting a random
         // amount of time. That is useful for undressing/redressing.
+        // If performance mode is turned off, we also apply morphs randomly immediately no matter the context.
 
-        if (updateMorphsWithoutTimer) {
-            if (applyProcessedMorph) {
-                SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
-            }
+        RE::ActorHandle actorHandle = a_actor->GetHandle();
 
-            if (a_actor->Is3DLoaded()) {
-                morphInterface->ApplyBodyMorphs(a_actor, true);
-                morphInterface->UpdateModelWeight(a_actor, false);
+        if (updateMorphsWithoutTimer || !setPerformanceMode) {
+            RE::Actor* actor = actorHandle.get().get();
+
+            if (actor != nullptr) {
+                if (applyProcessedMorph) {
+                    SetMorph(actor, distributionKey.c_str(), "OBody", 1.0f);
+                }
+
+                if (actor && actor->Is3DLoaded()) {
+                    morphInterface->ApplyBodyMorphs(actor, true);
+                    morphInterface->UpdateModelWeight(actor, false);
+                }
             }
         } else {
             auto actorName = a_actor->GetActorBase()->GetName();
-            RE::ActorHandle actorHandle = a_actor->GetHandle();
 
             unsigned long seed = std::chrono::system_clock::now().time_since_epoch().count();
             std::mt19937 rng(seed);
