@@ -1,9 +1,6 @@
 #pragma once
 
 namespace PresetManager {
-    inline SKSE::RegistrationSet<RE::Actor*, std::string> OnActorGenerated("OnActorGenerated"sv);
-    inline SKSE::RegistrationSet<RE::Actor*> OnActorNaked("OnActorNaked"sv);
-
     enum class BodyType : int32_t { CBBE, UNP };
 
     struct Slider {

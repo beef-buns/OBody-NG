@@ -6,6 +6,7 @@
 namespace Body {
     inline SKSE::RegistrationSet<RE::Actor*, std::string> OnActorGenerated("OnActorGenerated"sv);
     inline SKSE::RegistrationSet<RE::Actor*> OnActorNaked("OnActorNaked"sv);
+    inline SKSE::RegistrationSet<RE::Actor*> OnActorRemovingClothes("OnActorRemovingClothes"sv);
 
     class OBody {
     public:
@@ -34,6 +35,7 @@ namespace Body {
 
         bool IsClotheActive(RE::Actor* a_actor);
         bool IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
+        bool IsRemovingClothes(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
         bool IsFemale(RE::Actor* a_actor);
         bool IsProcessed(RE::Actor* a_actor);
         bool IsBlacklisted(RE::Actor* a_actor);
@@ -43,6 +45,8 @@ namespace Body {
         PresetManager::SliderSet GenerateClotheSliders(RE::Actor* a_actor);
 
         PresetManager::Slider DeriveSlider(RE::Actor* a_actor, const char* a_morph, float a_target);
+
+		bool synthesisInstalled = false;
 
         bool setRefit = true;
         bool setNippleRand = true;

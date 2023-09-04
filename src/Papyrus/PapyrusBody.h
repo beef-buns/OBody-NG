@@ -55,6 +55,10 @@ namespace PapyrusBody {
         Body::OnActorNaked.Register(a_quest);
     }
 
+    void RegisterForOBodyRemovingClothesEvent(RE::StaticFunctionTag*, RE::TESQuest* a_quest) {
+        Body::OnActorRemovingClothes.Register(a_quest);
+    }
+
     void ApplyPresetByName(RE::StaticFunctionTag*, RE::Actor* a_actor, std::string a_name) {
         auto obody = Body::OBody::GetInstance();
         obody->GenerateBodyByName(a_actor, a_name);
@@ -71,8 +75,12 @@ namespace PapyrusBody {
         obody->ClearActorMorphs(a_actor);
     }
 
+	bool presetNameComparison(std::string a, std::string b) {
+        return boost::algorithm::to_lower_copy(a) < boost::algorithm::to_lower_copy(b);
+    } 
+
     auto GetAllPossiblePresets(RE::StaticFunctionTag*, RE::Actor* a_actor) {
-        std::vector<RE::BSFixedString> ret;
+        std::vector<std::string> ret;
         auto presetContainer = PresetManager::PresetContainer::GetInstance();
         auto obody = Body::OBody::GetInstance();
         auto presetDistributionConfig = Parser::JSONParser::GetInstance()->presetDistributionConfig;
@@ -106,6 +114,8 @@ namespace PapyrusBody {
             }
         }
 
+		std::sort(ret.begin(), ret.end(), presetNameComparison);
+
         return ret;
     }
 
@@ -118,6 +128,7 @@ namespace PapyrusBody {
         BIND(AddClothesOverlay);
         BIND(RegisterForOBodyEvent);
         BIND(RegisterForOBodyNakedEvent);
+        BIND(RegisterForOBodyRemovingClothesEvent);
         BIND(GetFemaleDatabaseSize);
         BIND(GetMaleDatabaseSize);
         BIND(ResetActorOBodyMorphs);

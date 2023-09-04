@@ -116,6 +116,13 @@ namespace {
                     log::info("There are errors in the OBody JSON config file! OBody will not work properly.");
                 }
 
+				RE::TESDataHandler* pDataHandler = RE::TESDataHandler::GetSingleton();
+
+                obody->synthesisInstalled = pDataHandler->LookupModByName("SynthEBD.esp") != nullptr ||
+                                            pDataHandler->LookupModByName("Synthesis.esp") != nullptr;
+
+				log::info("Synthesis installed value is {}.", obody->synthesisInstalled);
+
                 return;
             }
 

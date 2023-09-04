@@ -63,7 +63,8 @@ namespace Body {
 
                     SetMorph(actor, distributionKey.c_str(), "OBody", 1.0f);
 
-                    if (actor && actor->Is3DLoaded()) {
+                    if (actor && actor->Is3DLoaded() &&
+                        !morphInterface->HasBodyMorph(actor, "obody_synthebd", "OBody")) {
                         morphInterface->ApplyBodyMorphs(actor, true);
                         morphInterface->UpdateModelWeight(actor, false);
                     }
@@ -76,6 +77,10 @@ namespace Body {
 
     void OBody::ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
         if (!IsProcessed(a_actor) || IsBlacklisted(a_actor)) return;
+
+		if (IsRemovingClothes(a_actor, a_removingArmor, a_equippedArmor)) {
+            OnActorRemovingClothes.SendEvent(a_actor);
+        }
 
         // if ORefit is disabled and actor has ORefit morphs, clear them right away.
         if (!setRefit && IsClotheActive(a_actor)) {
@@ -193,6 +198,11 @@ namespace Body {
         PresetManager::Preset preset;
         auto presetContainer = PresetManager::PresetContainer::GetInstance();
 
+        // This is needed to prevent a crash with SynthEBD/Synthesis
+        if (synthesisInstalled && a_actor != nullptr) {
+            SetMorph(a_actor, "obody_synthebd", "OBody", 1.0f);
+        }
+
         if (IsFemale(a_actor))
             preset = PresetManager::GetPresetByName(presetContainer->allFemalePresets, a_name, true);
         else
@@ -298,6 +308,39 @@ namespace Body {
         // if the items in the outfitsForceRefit key are not equipped
         return !hasBodyOutfit && !hasOutergarment && !hasUndergarment &&
                !jsonParser->IsAnyForceRefitItemEquipped(a_actor, a_removingArmor, a_equippedArmor);
+    }
+
+    bool OBody::IsRemovingClothes(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
+        auto outfitBody = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody);
+        auto outergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary);
+        auto undergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary);
+        auto outergarmentPelvis = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModPelvisPrimary);
+        auto undergarmentPelvis = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModPelvisSecondary);
+
+		bool isRemovingBody = false;
+        bool isRemovingOuterGarmentChest = false;
+        bool isRemovingUnderGarmentChest = false;
+        bool isRemovingOuterGarmentPelvis = false;
+        bool isRemovingUnderGarmentPelvis = false;
+
+        // When the TES EquipEvent is sent, the inventory isn't updated yet
+        // So we have to check if any of these armors is being removed...
+        if (a_removingArmor) {
+            if (outfitBody == a_equippedArmor) {
+                isRemovingBody = true;
+            } else if (outergarmentChest == a_equippedArmor) {
+                isRemovingOuterGarmentChest = true;
+            } else if (undergarmentChest == a_equippedArmor) {
+                isRemovingUnderGarmentChest = true;
+            } else if (outergarmentPelvis == a_equippedArmor) {
+                isRemovingOuterGarmentPelvis = true;
+            } else if (undergarmentPelvis == a_equippedArmor) {
+                isRemovingUnderGarmentPelvis = true;
+            }
+        }
+
+        return isRemovingBody || isRemovingOuterGarmentChest || isRemovingUnderGarmentChest ||
+               isRemovingOuterGarmentPelvis || isRemovingUnderGarmentPelvis;
     }
 
     bool OBody::IsFemale(RE::Actor* a_actor) { return a_actor->GetActorBase()->GetSex() == 1; }
