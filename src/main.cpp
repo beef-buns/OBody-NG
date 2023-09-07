@@ -118,8 +118,7 @@ namespace {
 
 				RE::TESDataHandler* pDataHandler = RE::TESDataHandler::GetSingleton();
 
-                obody->synthesisInstalled = pDataHandler->LookupModByName("SynthEBD.esp") != nullptr ||
-                                            pDataHandler->LookupModByName("Synthesis.esp") != nullptr;
+                obody->synthesisInstalled = pDataHandler->LookupModByName("SynthEBD.esp") != nullptr;
 
 				log::info("Synthesis installed value is {}.", obody->synthesisInstalled);
 

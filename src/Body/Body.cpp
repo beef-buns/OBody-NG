@@ -518,25 +518,27 @@ namespace Body {
         // remove defintion on hip bone
         AddSliderToSet(set, DeriveSlider(a_actor, "HipCarved", 0.0f));
 
-        // nipple
-        // sublte change to tip shape
-        AddSliderToSet(set, DeriveSlider(a_actor, "NippleDip", 0.0f));
-        AddSliderToSet(set, DeriveSlider(a_actor, "NippleTip", 0.0f));
-        // flatten areola
-        AddSliderToSet(set, DeriveSlider(a_actor, "NipplePuffy_v2", 0.0f));
-        // shrink areola
-        AddSliderToSet(set, DeriveSlider(a_actor, "AreolaSize", -0.3f));
-        // flatten nipple
-        AddSliderToSet(set, DeriveSlider(a_actor, "NipBGone", 1.0f));
-        // AddSliderToSet(set, DeriveSlider(a_actor, "NippleManga", -0.75f));
-        //  push nipples together
-        AddSliderToSet(set, Slider{"NippleDistance", 0.05f, 0.08f});
-        // Lift large breasts up
-        AddSliderToSet(set, Slider{"NippleDown", 0.0f, -0.1f});
-        // Flatten nipple + areola
-        AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkManga", -0.25f));
-        // Flatten nipple
-        // AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkiness", 0.0f));
+		if (setNippleSlidersRefitEnabled) {
+            // nipple
+            // sublte change to tip shape
+            AddSliderToSet(set, DeriveSlider(a_actor, "NippleDip", 0.0f));
+            AddSliderToSet(set, DeriveSlider(a_actor, "NippleTip", 0.0f));
+            // flatten areola
+            AddSliderToSet(set, DeriveSlider(a_actor, "NipplePuffy_v2", 0.0f));
+            // shrink areola
+            AddSliderToSet(set, DeriveSlider(a_actor, "AreolaSize", -0.3f));
+            // flatten nipple
+            AddSliderToSet(set, DeriveSlider(a_actor, "NipBGone", 1.0f));
+            // AddSliderToSet(set, DeriveSlider(a_actor, "NippleManga", -0.75f));
+            //  push nipples together
+            AddSliderToSet(set, Slider{"NippleDistance", 0.05f, 0.08f});
+            // Lift large breasts up
+            AddSliderToSet(set, Slider{"NippleDown", 0.0f, -0.1f});
+            // Flatten nipple + areola
+            AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkManga", -0.25f));
+            // Flatten nipple
+            // AddSliderToSet(set, DeriveSlider(a_actor, "NipplePerkiness", 0.0f));
+        }
 
         return set;
     }

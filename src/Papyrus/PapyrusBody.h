@@ -17,6 +17,11 @@ namespace PapyrusBody {
         obody->setRefit = a_enabled;
     }
 
+	void SetNippleSlidersORefitEnabled(RE::StaticFunctionTag*, bool a_enabled) {
+        auto obody = Body::OBody::GetInstance();
+        obody->setNippleSlidersRefitEnabled = a_enabled;
+    }
+
     void SetNippleRand(RE::StaticFunctionTag*, bool a_enabled) {
         auto obody = Body::OBody::GetInstance();
         obody->setNippleRand = a_enabled;
@@ -134,6 +139,7 @@ namespace PapyrusBody {
         BIND(ResetActorOBodyMorphs);
 
         BIND(SetORefit);
+        BIND(SetNippleSlidersORefitEnabled);
         BIND(SetNippleRand);
         BIND(SetGenitalRand);
         BIND(SetPerformanceMode);

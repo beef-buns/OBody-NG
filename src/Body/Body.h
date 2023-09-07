@@ -49,6 +49,7 @@ namespace Body {
 		bool synthesisInstalled = false;
 
         bool setRefit = true;
+        bool setNippleSlidersRefitEnabled = true;
         bool setNippleRand = true;
         bool setGenitalRand = true;
         bool setPerformanceMode = true;
