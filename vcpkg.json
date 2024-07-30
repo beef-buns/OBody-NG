@@ -10,13 +10,18 @@
         "plugin": {
             "description": "Build the SKSE plugin.",
             "dependencies": [
+                "rsm-binary-io",
+                "frozen",
                 "articuno",
-                "commonlibsse-ng",
                 "pugixml",
                 "nlohmann-json",
                 "boost-stl-interfaces",
                 "span-lite",
-                "boost-algorithm"
+                "boost-algorithm",
+                "spdlog",
+                "directxtk",
+                "catch2",
+                "rapidcsv"
             ]
         }
     },

@@ -13,7 +13,10 @@
 #include <random>
 #include <boost/algorithm/string.hpp>
 
-namespace WinAPI = SKSE::WinAPI;
+#define WIN32_LEAN_AND_MEAN 1
+#include <Windows.h>
+
+namespace WinAPI = REX::W32;
 namespace logger = SKSE::log;
 namespace fs = std::filesystem;
 
@@ -22,3 +25,4 @@ using namespace std::literals;
 using json = nlohmann::json;
 
 #define DLLEXPORT __declspec(dllexport)
+#include "Plugin.h"

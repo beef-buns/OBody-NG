@@ -12,44 +12,33 @@ project(
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
+
+include(XSEPlugin)
 
 include(GNUInstallDirs)
 
-configure_file(
-        ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version.rc.in
-        ${CMAKE_CURRENT_BINARY_DIR}/version.rc
-        @ONLY)
 
-set(sources
-    src/Body/Body.cpp
-        src/Papyrus/Papyrus.cpp
-        src/JSONParser/JSONParser.cpp
-        src/PresetManager/PresetManager.cpp
-        src/main.cpp
-
-        ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
-
-source_group(
-        TREE ${CMAKE_CURRENT_SOURCE_DIR}
-        FILES
-        ${sources})
 
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_LIBS ON)
+
+
 find_package(pugixml REQUIRED)
 find_package(nlohmann_json REQUIRED)
-find_package(CommonLibSSE CONFIG REQUIRED)
+# find_package(CommonLibSSE CONFIG REQUIRED)
 find_package(ryml CONFIG REQUIRED)
 find_package(BOOST REQUIRED)
 find_package(span-lite CONFIG REQUIRED)
 
 find_path(ARTICUNO_INCLUDE_DIRS "articuno/articuno.h")
 
-add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${sources})
-add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
+
+# add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${sources})
 
 target_include_directories(${PROJECT_NAME}
         PRIVATE
@@ -63,12 +52,35 @@ target_include_directories(${PROJECT_NAME}
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
 target_link_libraries(${PROJECT_NAME}
+PUBLIC
+	CommonLibSSE::CommonLibSSE
         PRIVATE
         ryml::ryml
         pugixml
         nlohmann_json::nlohmann_json
                 Boost::boost
                 nonstd::span-lite)
+
+				# https://gitlab.kitware.com/cmake/cmake/-/issues/24922#note_1371990
+if(MSVC_VERSION GREATER_EQUAL 1936 AND MSVC_IDE) # 17.6+
+	# When using /std:c++latest, "Build ISO C++23 Standard Library Modules" defaults to "Yes".
+	# Default to "No" instead.
+	#
+	# As of CMake 3.26.4, there isn't a way to control this property
+	# (https://gitlab.kitware.com/cmake/cmake/-/issues/24922),
+	# We'll use the MSBuild project system instead
+	# (https://learn.microsoft.com/en-us/cpp/build/reference/vcxproj-file-structure)
+	file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/Directory.Build.props" CONTENT [==[
+<Project>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <BuildStlModules>false</BuildStlModules>
+    </ClCompile>
+  </ItemDefinitionGroup>
+</Project>
+]==] @ONLY)
+endif()
+
 
 target_precompile_headers(${PROJECT_NAME}
         PRIVATE
@@ -79,3 +91,18 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/Sample"
 
 install(TARGETS ${PROJECT_NAME}
         DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+
+foreach(DEPLOY_TARGET $ENV{SkyrimPluginTargets})
+  set(DLL_FOLDER "${DEPLOY_TARGET}/${PROJECT_NAME} - Dev/SKSE/Plugins")
+
+  message("Adding deployment target ${DLL_FOLDER}.")
+
+  add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}> "${DLL_FOLDER}")
+  if(${CMAKE_BUILD_TYPE} STREQUAL Debug OR ${CMAKE_BUILD_TYPE} STREQUAL RelWithDebInfo)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${DLL_FOLDER}"
+            COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_PDB_FILE:${PROJECT_NAME}> "${DLL_FOLDER}")
+  endif()
+endforeach()
