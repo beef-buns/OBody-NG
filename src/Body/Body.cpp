@@ -5,6 +5,9 @@
 
 using namespace PresetManager;
 
+const auto OBODY_REFIT_BLACKLISTED = "OBodyRefitBlacklisted";
+const auto OBODY_FORCE_REFIT = "OBodyForceRefit";
+
 namespace Body {
     OBody* OBody::GetInstance() {
         static OBody instance;
@@ -78,7 +81,7 @@ namespace Body {
     void OBody::ProcessActorEquipEvent(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
         if (!IsProcessed(a_actor) || IsBlacklisted(a_actor)) return;
 
-		if (IsRemovingClothes(a_actor, a_removingArmor, a_equippedArmor)) {
+        if (IsRemovingClothes(a_actor, a_removingArmor, a_equippedArmor)) {
             OnActorRemovingClothes.SendEvent(a_actor);
         }
 
@@ -146,7 +149,7 @@ namespace Body {
         logger::info("Trying to find and apply preset to {}", actorName);
 
         // If NPC is blacklisted, set him as processed
-        if (jsonParser->IsNPCBlacklisted(actorName, actorID)) {
+        if (a_actor->HasKeywordString(OBODY_REFIT_BLACKLISTED) || jsonParser->IsNPCBlacklisted(actorName, actorID)) {
             SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
             SetMorph(a_actor, "obody_blacklisted", "OBody", 1.0f);
             return;
@@ -277,6 +280,12 @@ namespace Body {
 
     bool OBody::IsClotheActive(RE::Actor* a_actor) { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }
 
+    bool OBody::IsOutfitBlacklisted(RE::TESObjectARMO* armor) {
+        auto jsonParser = Parser::JSONParser::GetInstance();
+
+        return armor->HasKeywordString(OBODY_REFIT_BLACKLISTED) || jsonParser->IsOutfitBlacklisted(*armor);
+    }
+
     bool OBody::IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor) {
         auto jsonParser = Parser::JSONParser::GetInstance();
 
@@ -297,11 +306,9 @@ namespace Body {
         }
 
         // if outfit is blacklisted from ORefit, we assume as not having the outfit so ORefit is not applied
-        bool hasBodyOutfit = outfitBody == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*outfitBody);
-        bool hasOutergarment =
-            outergarmentChest == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*outergarmentChest);
-        bool hasUndergarment =
-            undergarmentChest == nullptr ? false : !jsonParser->IsOutfitBlacklisted(*undergarmentChest);
+        bool hasBodyOutfit = outfitBody == nullptr ? false : !IsOutfitBlacklisted(outfitBody);
+        bool hasOutergarment = outergarmentChest == nullptr ? false : !IsOutfitBlacklisted(outergarmentChest);
+        bool hasUndergarment = undergarmentChest == nullptr ? false : !IsOutfitBlacklisted(undergarmentChest);
 
         // Actor counts as naked if:
         // he has no clothing in the slots defined above / they are blacklisted from ORefit
@@ -317,7 +324,7 @@ namespace Body {
         auto outergarmentPelvis = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModPelvisPrimary);
         auto undergarmentPelvis = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModPelvisSecondary);
 
-		bool isRemovingBody = false;
+        bool isRemovingBody = false;
         bool isRemovingOuterGarmentChest = false;
         bool isRemovingUnderGarmentChest = false;
         bool isRemovingOuterGarmentPelvis = false;
@@ -518,7 +525,7 @@ namespace Body {
         // remove defintion on hip bone
         AddSliderToSet(set, DeriveSlider(a_actor, "HipCarved", 0.0f));
 
-		if (setNippleSlidersRefitEnabled) {
+        if (setNippleSlidersRefitEnabled) {
             // nipple
             // sublte change to tip shape
             AddSliderToSet(set, DeriveSlider(a_actor, "NippleDip", 0.0f));

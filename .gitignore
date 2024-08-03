@@ -10,3 +10,4 @@ SkyrimSE.code-workspace
 .vscode/tasks.json
 .vs/
 build/
+.cache

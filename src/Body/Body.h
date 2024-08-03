@@ -33,6 +33,7 @@ namespace Body {
 
         float GetWeight(RE::Actor* a_actor);
 
+        bool IsOutfitBlacklisted(RE::TESObjectARMO* armor);
         bool IsClotheActive(RE::Actor* a_actor);
         bool IsNaked(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
         bool IsRemovingClothes(RE::Actor* a_actor, bool a_removingArmor, RE::TESForm* a_equippedArmor);
@@ -46,7 +47,7 @@ namespace Body {
 
         PresetManager::Slider DeriveSlider(RE::Actor* a_actor, const char* a_morph, float a_target);
 
-		bool synthesisInstalled = false;
+        bool synthesisInstalled = false;
 
         bool setRefit = true;
         bool setNippleSlidersRefitEnabled = true;
