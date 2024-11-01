@@ -5,6 +5,9 @@
 
 using namespace PresetManager;
 
+const auto OBODY_BLACKLISTED = "OBodyBlacklisted";
+const auto OBODY_BLACKLISTED_MALE = "OBodyBlacklistedMale";
+const auto OBODY_BLACKLISTED_FEMALE = "OBodyBlacklistedFemale";
 const auto OBODY_REFIT_BLACKLISTED = "OBodyRefitBlacklisted";
 const auto OBODY_FORCE_REFIT = "OBodyForceRefit";
 
@@ -120,6 +123,37 @@ namespace Body {
         }
     }
 
+    bool OBody::ShouldBlacklist(RE::Actor* a_actor) {
+        if (a_actor->HasKeywordString(OBODY_BLACKLISTED)) {
+            return true;
+        }
+
+        auto actorBase = a_actor->GetActorBase();
+
+        if (actorBase) {
+            if (actorBase->HasKeywordByEditorID(OBODY_BLACKLISTED)) {
+                return true;
+            }
+
+            auto actorRace = actorBase->GetRace();
+            if (actorRace) {
+                if (actorRace->HasKeywordByEditorID(OBODY_BLACKLISTED)) {
+                    return true;
+                }
+
+                if (actorRace->HasKeywordByEditorID(OBODY_BLACKLISTED_MALE) && !IsFemale(a_actor)) {
+                    return true;
+                }
+
+                if (actorRace->HasKeywordByEditorID(OBODY_BLACKLISTED_FEMALE) && IsFemale(a_actor)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     void OBody::GenerateActorBody(RE::Actor* a_actor) {
         // The main function of OBody NG
 
@@ -133,8 +167,7 @@ namespace Body {
         auto presetContainer = PresetManager::PresetContainer::GetInstance();
 
         // If we have no presets at all for the actor's sex, then don't do anything
-        if ((female && presetContainer->femalePresets.size() < 1) ||
-            !female && presetContainer->malePresets.size() < 1) {
+        if ((female && presetContainer->femalePresets.empty()) || !female && presetContainer->malePresets.empty()) {
             return;
         }
 
@@ -149,7 +182,7 @@ namespace Body {
         logger::info("Trying to find and apply preset to {}", actorName);
 
         // If NPC is blacklisted, set him as processed
-        if (a_actor->HasKeywordString(OBODY_REFIT_BLACKLISTED) || jsonParser->IsNPCBlacklisted(actorName, actorID)) {
+        if (ShouldBlacklist(a_actor) || jsonParser->IsNPCBlacklisted(actorName, actorID)) {
             SetMorph(a_actor, distributionKey.c_str(), "OBody", 1.0f);
             SetMorph(a_actor, "obody_blacklisted", "OBody", 1.0f);
             return;
@@ -158,7 +191,7 @@ namespace Body {
         // First, we attempt to get the NPC's preset from the keys npcFormID and npc from the JSON
         preset = jsonParser->GetNPCPreset(actorName, actorID, female);
 
-        if (preset.name.size() == 0) {
+        if (preset.name.empty()) {
             auto actorRace = actorBase->GetRace()->GetFormEditorID();
 
             // if we can't find it, we check if the NPC is blacklisted by plugin name or by race
@@ -172,18 +205,18 @@ namespace Body {
             preset = jsonParser->GetNPCFactionPreset(actorBase, female);
 
             // If that also fails, we check if we have a preset in the NPC's plugin
-            if (preset.name.size() == 0) {
+            if (preset.name.empty()) {
                 preset = jsonParser->GetNPCPluginPreset(actorBase, actorName, female);
             }
 
             // And if that also fails, we check if we have a preset in the NPC's race
-            if (preset.name.size() == 0) {
+            if (preset.name.empty()) {
                 preset = jsonParser->GetNPCRacePreset(actorRace, female);
             }
         }
 
         // If we got here without a preset, then we just fetch one randomly
-        if (preset.name.size() == 0) {
+        if (preset.name.empty()) {
             logger::info("No preset defined for this actor, getting it randomly");
             if (female) {
                 preset = PresetManager::GetRandomPreset(presetContainer->femalePresets);

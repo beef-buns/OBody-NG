@@ -323,7 +323,7 @@ namespace Parser {
             actorFactions.push_back(rank.faction);
         }
 
-        if (!actorFactions.size()) {
+        if (actorFactions.empty()) {
             return preset;
         }
 
@@ -353,7 +353,7 @@ namespace Parser {
 
         auto character = GetNPCFromCategorySet(formID);
 
-        if (character.bodyslidePresets.size()) {
+        if (!character.bodyslidePresets.empty()) {
             preset = PresetManager::GetRandomPresetByName(presetSet, character.bodyslidePresets, female);
         } else if (presetDistributionConfig.contains("npc") && presetDistributionConfig["npc"].contains(actorName)) {
             preset =

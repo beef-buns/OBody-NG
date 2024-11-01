@@ -40,6 +40,7 @@ namespace Body {
         bool IsFemale(RE::Actor* a_actor);
         bool IsProcessed(RE::Actor* a_actor);
         bool IsBlacklisted(RE::Actor* a_actor);
+        bool ShouldBlacklist(RE::Actor* a_actor);
 
         PresetManager::SliderSet GenerateRandomNippleSliders();
         PresetManager::SliderSet GenerateRandomGenitalSliders();
