@@ -1,9 +1,10 @@
 #pragma once
 
-#include "RE/Skyrim.h"
-#include "SKSE/SKSE.h"
+#include <RE/Skyrim.h>
+#include <SKSE/SKSE.h>
 
 // Note: add new modules here before using
+#include <unordered_set>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
@@ -13,7 +14,6 @@
 #include <random>
 #include <boost/algorithm/string.hpp>
 
-namespace WinAPI = SKSE::WinAPI;
 namespace logger = SKSE::log;
 namespace fs = std::filesystem;
 
