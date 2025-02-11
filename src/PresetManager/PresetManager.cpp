@@ -17,49 +17,50 @@ namespace PresetManager {
 
         auto& container{PresetManager::PresetContainer::GetInstance()};
 
-        auto& femalePresets = container.femalePresets;
-        auto& malePresets = container.malePresets;
+        auto& femalePresets{container.femalePresets};
+        auto& malePresets{container.malePresets};
 
-        auto& allFemalePresets = container.allFemalePresets;
-        auto& allMalePresets = container.allMalePresets;
+        auto& allFemalePresets{container.allFemalePresets};
+        auto& allMalePresets{container.allMalePresets};
 
-        auto& blacklistedFemalePresets = container.blacklistedFemalePresets;
-        auto& blacklistedMalePresets = container.blacklistedMalePresets;
+        auto& blacklistedFemalePresets{container.blacklistedFemalePresets};
+        auto& blacklistedMalePresets{container.blacklistedMalePresets};
+        auto& parser{Parser::JSONParser::GetInstance()};
+        auto& presetDistributionConfig{parser.presetDistributionConfig};
 
-        auto presetDistributionConfig = Parser::JSONParser::GetInstance().presetDistributionConfig;
-
-        auto& blacklistedPresets = presetDistributionConfig["blacklistedPresetsFromRandomDistribution"];
-        stl::RemoveDuplicatesInJsonArray(blacklistedPresets);
-        auto blacklistedPresetsBegin = blacklistedPresets.begin();
-        auto blacklistedPresetsEnd = blacklistedPresets.end();
+        auto& blacklistedPresets{presetDistributionConfig["blacklistedPresetsFromRandomDistribution"]};
+        stl::RemoveDuplicatesInJsonArray(blacklistedPresets, presetDistributionConfig.GetAllocator());
+        const auto blacklistedPresetsBegin = blacklistedPresets.Begin();
+        const auto blacklistedPresetsEnd = blacklistedPresets.End();
 
         for (const auto& entry : fs::directory_iterator(root_path)) {
             const auto& path{entry.path()};
-            if (path.extension() != ".xml"sv) continue;
-            if (IsClothedSet(path.string())) continue;
+            if (path.extension().c_str() != L".xml"sv) continue;
+            if (IsClothedSet(path.wstring())) continue;
 
             pugi::xml_document doc;
             if (auto result = doc.load_file(path.c_str(), pugi::parse_default, pugi::encoding_auto); !result) {
                 wchar_t buffer[1024];
                 swprintf_s(buffer, std::size(buffer), L"load failed: %s [%hs]", path.c_str(), result.description());
                 SPDLOG_WARN(buffer);
+                parser.invalid_presets++;
                 continue;
             }
 
             auto presets = doc.child("SliderPresets");
-            for (auto& node : presets) {
+            for (const auto& node : presets) {
                 auto preset = GeneratePreset(node);
                 if (!preset) continue;
 
                 if (IsFemalePreset(*preset)) {
-                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
+                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name.c_str()) !=
                         blacklistedPresetsEnd) {
                         blacklistedFemalePresets.push_back(*preset);
                     } else {
                         femalePresets.push_back(*preset);
                     }
                 } else {
-                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name) !=
+                    if (std::find(blacklistedPresetsBegin, blacklistedPresetsEnd, preset.value().name.c_str()) !=
                         blacklistedPresetsEnd) {
                         blacklistedMalePresets.push_back(*preset);
                     } else {
@@ -75,89 +76,74 @@ namespace PresetManager {
         allMalePresets = malePresets;
         allMalePresets.insert_range(allMalePresets.end(), blacklistedMalePresets);
 
-        logger::info("Female presets: {}", femalePresets.size());
-        logger::info("Male presets: {}", malePresets.size());
+        logger::info("Female presets: {}, Male presets: {}", femalePresets.size(), malePresets.size());
         logger::info("Blacklisted: Female presets: {}, Male Presets: {}", blacklistedFemalePresets.size(),
                      blacklistedMalePresets.size());
     }
 
-    std::optional<Preset> GeneratePreset(pugi::xml_node a_node) {
-        std::string name{a_node.attribute("name").value()};
+    std::optional<Preset> GeneratePreset(const pugi::xml_node& a_node) {
+        const std::string_view name{a_node.attribute("name").value()};
 
-        // Some preset names have dumb trailing whitespaces which may mess up the configuration file...
-        boost::trim(name);
         if (IsClothedSet(name)) return {};
 
-        std::string body = a_node.attribute("set").value();
-        auto sliderSet = SliderSetFromNode(a_node, GetBodyType(body));
+        const std::string_view body{a_node.attribute("set").value()};
 
-        Preset preset(name, body);
-        preset.sliders = sliderSet;
-        return preset;
+        return Preset{name.data(), body.data(), SliderSetFromNode(a_node, GetBodyType(body))};
     }
 
-    Preset GetPresetByName(PresetSet a_presetSet, std::string a_name, bool female) {
+    Preset GetPresetByName(const PresetSet& a_presetSet, const std::string_view a_name, const bool female) {
         logger::info("Looking for preset: {}", a_name);
 
-        boost::trim(a_name);
-        boost::to_upper(a_name);
-
         for (auto& preset : a_presetSet) {
-            if (stl::cmp(boost::to_upper_copy(preset.name), a_name)) return preset;
+            if (stl::cmp(preset.name, a_name)) return preset;
         }
 
         logger::info("Preset not found, choosing a random one.");
-        const auto& container = PresetManager::PresetContainer::GetInstance();
+        const auto& container{PresetManager::PresetContainer::GetInstance()};
         return GetRandomPreset(female ? container.femalePresets : container.malePresets);
     }
 
-    Preset GetRandomPreset(PresetSet a_presetSet) {
+    Preset GetRandomPreset(const PresetSet& a_presetSet) {
         static_assert(std::is_same_v<decltype(0llu), decltype(a_presetSet.size())>,
                       "Ensure that below literal is of type std::size_t");
         return a_presetSet[stl::random(0llu, a_presetSet.size())];
     }
 
-    Preset GetPresetByNameForRandom(const PresetSet& a_presetSet, std::string a_name, bool /*female*/) {
+    std::optional<Preset> GetPresetByNameForRandom(const PresetSet& a_presetSet, const std::string_view a_name) {
         logger::info("Looking for preset: {}", a_name);
 
-        boost::trim(a_name);
-        boost::to_upper(a_name);
-
-        Preset presetRet;
-
         for (const auto& preset : a_presetSet) {
-            if (stl::cmp(boost::to_upper_copy(preset.name), a_name)) {
-                presetRet = preset;
-                break;
+            if (stl::cmp(preset.name, a_name)) {
+                return preset;
             }
         }
 
-        return presetRet;
+        return {};
     }
 
     Preset GetRandomPresetByName(const PresetSet& a_presetSet, std::vector<std::string_view> a_presetNames,
                                  const bool female) {
         if (a_presetNames.empty()) {
             logger::info("Preset names size is empty, returning a random one");
-            const auto& container = PresetManager::PresetContainer::GetInstance();
+            const auto& container{PresetManager::PresetContainer::GetInstance()};
             return GetRandomPreset(female ? container.femalePresets : container.malePresets);
         }
 
         static_assert(std::is_same_v<decltype(0llu), decltype(a_presetNames.size())>,
                       "Ensure that below literal is of type std::size_t");
-        const std::string chosenPreset = a_presetNames[stl::random(0llu, a_presetNames.size())].data();
+        const std::string_view chosenPreset{a_presetNames[stl::random(0llu, a_presetNames.size())]};
 
-        Preset preset = GetPresetByNameForRandom(a_presetSet, chosenPreset, female);
+        const std::optional<Preset> preset{GetPresetByNameForRandom(a_presetSet, chosenPreset)};
 
-        if (preset.name.empty()) {
-            if (const auto iterator = std::ranges::find(a_presetNames, chosenPreset); iterator != a_presetNames.end()) {
+        if (!preset.has_value()) {
+            if (const auto iterator{std::ranges::find(a_presetNames, chosenPreset)}; iterator != a_presetNames.end()) {
                 a_presetNames.erase(iterator);
             }
 
             return GetRandomPresetByName(a_presetSet, a_presetNames, female);
         }
 
-        return preset;
+        return *preset;
     }
 
     bool IsFemalePreset(const Preset& a_preset) {
@@ -165,12 +151,15 @@ namespace PresetManager {
         return !stl::contains(a_preset.body, body);
     }
 
-    bool IsClothedSet(std::string a_set) {
+    bool IsClothedSet(const std::string_view a_set) {
         constexpr std::array clothed{"cloth"sv, "outfit"sv, "nevernude"sv, "bikini"sv, "feet"sv,
                                      "hands"sv, "push"sv,   "cleavage"sv,  "armor"sv};
+        return stl::contains(a_set, clothed);
+    }
 
-        std::ranges::transform(a_set, a_set.begin(), [](const unsigned char c) { return std::tolower(c); });
-
+    bool IsClothedSet(const std::wstring_view a_set) {
+        constexpr std::array clothed{L"cloth"sv, L"outfit"sv, L"nevernude"sv, L"bikini"sv, L"feet"sv,
+                                     L"hands"sv, L"push"sv,   L"cleavage"sv,  L"armor"sv};
         return stl::contains(a_set, clothed);
     }
 
@@ -180,7 +169,7 @@ namespace PresetManager {
         for (auto& node : a_node) {
             if (!stl::cmp(node.name(), "SetSlider")) continue;
 
-            std::string name = node.attribute("name").value();
+            std::string_view name{node.attribute("name").value()};
 
             bool inverted{false};
             if (a_body == BodyType::UNP) {
@@ -188,12 +177,12 @@ namespace PresetManager {
             }
 
             float min{0}, max{0};
-            float val = node.attribute("value").as_float() / 100.0f;
-            auto size = node.attribute("size").value();
+            const float val{node.attribute("value").as_float() / 100.0f};
+            const auto size{node.attribute("size").value()};
 
             (stl::cmp(size, "big") ? max : min) = inverted ? 1.0f - val : val;
 
-            AddSliderToSet(ret, Slider(name, min, max), inverted);
+            AddSliderToSet(ret, Slider(name.data(), min, max), inverted);
         }
 
         return ret;
@@ -201,7 +190,7 @@ namespace PresetManager {
 
     void AddSliderToSet(SliderSet& a_sliderSet, Slider&& a_slider, [[maybe_unused]] bool a_inverted) {
         if (const auto it = a_sliderSet.find(a_slider.name); it != a_sliderSet.end()) {
-            constexpr float val = 0;
+            constexpr float val{};
             auto& current = it->second;
             if ((current.min == val) && (a_slider.min != val)) current.min = a_slider.min;
             if ((current.max == val) && (a_slider.max != val)) current.max = a_slider.max;

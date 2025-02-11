@@ -3,7 +3,7 @@
 #include "Body/Body.h"
 #include "JSONParser/JSONParser.h"
 
-Event::OBodyEventHandler Event::OBodyEventHandler::singleton;
+constinit Event::OBodyEventHandler Event::OBodyEventHandler::singleton;
 
 void Event::OBodyEventHandler::Register() {
     if (auto* const events{RE::ScriptEventSourceHolder::GetSingleton()}) {
@@ -17,7 +17,7 @@ RE::BSEventNotifyControl Event::OBodyEventHandler::ProcessEvent(const RE::TESIni
                                                                 RE::BSTEventSource<RE::TESInitScriptEvent>*) {
     if (!a_event || !a_event->objectInitialized->Is3DLoaded()) return RE::BSEventNotifyControl::kContinue;
 
-    if (RE::Actor* actor{a_event->objectInitialized->As<RE::Actor>()};
+    if (RE::Actor * actor{a_event->objectInitialized->As<RE::Actor>()};
         (actor != nullptr) && actor->HasKeywordString("ActorTypeNPC") && !actor->IsChild()) {
         Body::OBody::GetInstance().GenerateActorBody(actor);
     }
@@ -28,16 +28,7 @@ RE::BSEventNotifyControl Event::OBodyEventHandler::ProcessEvent(const RE::TESIni
 RE::BSEventNotifyControl Event::OBodyEventHandler::ProcessEvent(const RE::TESLoadGameEvent* a_event,
                                                                 RE::BSTEventSource<RE::TESLoadGameEvent>*) {
     if (!a_event) return RE::BSEventNotifyControl::kContinue;
-
     const auto& parser{Parser::JSONParser::GetInstance()};
-
-    if (!parser.presetDistributionConfigValid) {
-        RE::DebugMessageBox(
-            "The OBody NG JSON configuration file contains errors! OBody NG will not work properly. Please "
-            "exit the game now and refer to the OBody NG JSON Configuration Guide to validate your "
-            "configuration file.");
-    }
-
     if (!parser.bodyslidePresetsParsingValid) {
         RE::DebugMessageBox(
             "A critical error has occurred while parsing the Bodyslide presets files. This most likely means "
@@ -46,12 +37,20 @@ RE::BSEventNotifyControl Event::OBodyEventHandler::ProcessEvent(const RE::TESLoa
             "Please exit the game now and refer to the OBody NG mod page for more information.");
     }
 
+    if (parser.invalid_presets != 0) {
+        char message[256];
+        sprintf_s(message, std::size(message), "There are %zu invalid presets(s) with parsing errors, they wont be loaded in but are logged in OBody.log", parser.invalid_presets);
+        RE::DebugMessageBox(message);
+    }
+
     return RE::BSEventNotifyControl::kContinue;
 }
 
 RE::BSEventNotifyControl Event::OBodyEventHandler::ProcessEvent(const RE::TESEquipEvent* a_event,
                                                                 RE::BSTEventSource<RE::TESEquipEvent>*) {
-    if (!a_event) return RE::BSEventNotifyControl::kContinue;
+    if (!a_event || !a_event->actor || !a_event->actor->As<RE::Actor>() || a_event->baseObject == 0) {
+        return RE::BSEventNotifyControl::kContinue;
+    }
     const auto actor = a_event->actor->As<RE::Actor>();
     const auto form = RE::TESForm::LookupByID(a_event->baseObject);
 

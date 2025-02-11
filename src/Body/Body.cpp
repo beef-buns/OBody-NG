@@ -28,7 +28,7 @@ namespace Body {
         // amount of time. That is useful for undressing/redressing.
         // If performance mode is turned off, we also apply morphs randomly immediately no matter the context.
 
-        RE::ActorHandle actorHandle = a_actor->GetHandle();
+        RE::ActorHandle actorHandle{a_actor->GetHandle()};
 
         if (updateMorphsWithoutTimer || !setPerformanceMode) {
             if (RE::Actor* actor = actorHandle.get().get()) {
@@ -52,7 +52,7 @@ namespace Body {
             std::mt19937 rng{seed};
             std::uniform_int_distribution gen{3, 7};
 
-            auto sleepFor = gen(rng);
+            auto sleepFor{gen(rng)};
             // ReSharper restore CppDFAUnusedValue
             // ReSharper restore CppDFAUnreadVariable
 
@@ -60,9 +60,7 @@ namespace Body {
             std::thread([this, actorHandle, actorName, sleepFor] {
                 std::this_thread::sleep_for(std::chrono::seconds(sleepFor));
 
-                RE::Actor* actor = actorHandle.get().get();
-
-                if (actor != nullptr) {
+                if (RE::Actor * actor{actorHandle.get().get()}) {
                     logger::info("Actor {} is valid, updating morphs now", actorName);
 
                     SetMorph(actor, distributionKey.c_str(), "OBody", 1.0F);
@@ -129,22 +127,20 @@ namespace Body {
             return;
         }
 
-        bool female = IsFemale(a_actor);
+        bool female{IsFemale(a_actor)};
 
-        auto& presetContainer = PresetManager::PresetContainer::GetInstance();
+        auto& presetContainer{PresetManager::PresetContainer::GetInstance()};
 
         // If we have no presets at all for the actor's sex, then don't do anything
         if ((female && presetContainer.femalePresets.empty()) || !female && presetContainer.malePresets.empty()) {
             return;
         }
 
-        PresetManager::Preset preset;
+        auto& jsonParser{Parser::JSONParser::GetInstance()};
 
-        auto& jsonParser = Parser::JSONParser::GetInstance();
-
-        auto actorBase = a_actor->GetActorBase();
-        auto actorName = actorBase->GetName();
-        auto actorID = actorBase->GetFormID();
+        auto actorBase{a_actor->GetActorBase()};
+        auto actorName{actorBase->GetName()};
+        auto actorID{actorBase->GetFormID()};
 
         logger::info("Trying to find and apply preset to {}", actorName);
 
@@ -156,9 +152,9 @@ namespace Body {
         }
 
         // First, we attempt to get the NPC's preset from the keys npcFormID and npc from the JSON
-        preset = jsonParser.GetNPCPreset(actorName, actorID, female);
+        std::optional<Preset> preset{jsonParser.GetNPCPreset(actorName, actorID, female)};
 
-        if (preset.name.empty()) {
+        if (!preset.has_value()) {
             auto actorRace{stl::get_editorID(actorBase->GetRace()->As<RE::TESForm>())};
 
             // if we can't find it, we check if the NPC is blacklisted by plugin name or by race
@@ -172,38 +168,38 @@ namespace Body {
             preset = jsonParser.GetNPCFactionPreset(actorBase, female);
 
             // If that also fails, we check if we have a preset in the NPC's plugin
-            if (preset.name.empty()) {
+            if (!preset.has_value()) {
                 preset = jsonParser.GetNPCPluginPreset(actorBase, actorName, female);
             }
 
             // And if that also fails, we check if we have a preset in the NPC's race
-            if (preset.name.empty()) {
+            if (!preset.has_value()) {
                 preset = jsonParser.GetNPCRacePreset(actorRace.c_str(), female);
             }
         }
 
         // If we got here without a preset, then we just fetch one randomly
-        if (preset.name.empty()) {
+        if (!preset.has_value()) {
             logger::info("No preset defined for this actor, getting it randomly");
-            preset = PresetManager::GetRandomPreset(
-                female ? presetContainer.femalePresets : presetContainer.malePresets);
+            preset =
+                PresetManager::GetRandomPreset(female ? presetContainer.femalePresets : presetContainer.malePresets);
         }
 
-        logger::info("Preset {} will be applied to {}", preset.name, actorName);
+        logger::info("Preset {} will be applied to {}", preset->name, actorName);
 
-        GenerateBodyByPreset(a_actor, preset, false);
+        GenerateBodyByPreset(a_actor, *preset, false);
     }
 
     void OBody::GenerateBodyByName(RE::Actor* a_actor, const std::string& a_name) const {
-        const auto& presetContainer = PresetContainer::GetInstance();
+        const auto& presetContainer{PresetContainer::GetInstance()};
 
         // This is needed to prevent a crash with SynthEBD/Synthesis
         if (synthesisInstalled && a_actor != nullptr) {
             SetMorph(a_actor, "obody_synthebd", "OBody", 1.0F);
         }
 
-        Preset preset = GetPresetByName(
-            IsFemale(a_actor) ? presetContainer.allFemalePresets : presetContainer.allMalePresets, a_name, true);
+        Preset preset{GetPresetByName(
+            IsFemale(a_actor) ? presetContainer.allFemalePresets : presetContainer.allMalePresets, a_name, true)};
 
         GenerateBodyByPreset(a_actor, preset, true);
     }
@@ -221,13 +217,13 @@ namespace Body {
         if (IsFemale(a_actor)) {
             // Generate random nipple sliders if needed
             if (setNippleRand) {
-                PresetManager::SliderSet set = GenerateRandomNippleSliders();
+                PresetManager::SliderSet set{GenerateRandomNippleSliders()};
                 ApplySliderSet(a_actor, set, "OBody");
             }
 
             if (setGenitalRand) {
                 // Generate random genital sliders if needed
-                PresetManager::SliderSet set = GenerateRandomGenitalSliders();
+                PresetManager::SliderSet set{GenerateRandomGenitalSliders()};
                 ApplySliderSet(a_actor, set, "OBody");
             }
         }
@@ -249,12 +245,12 @@ namespace Body {
 
     void OBody::ApplySlider(RE::Actor* a_actor, const PresetManager::Slider& a_slider, const char* a_key,
                             const float a_weight) const {
-        const float val = ((a_slider.max - a_slider.min) * a_weight) + a_slider.min;
+        const float val{((a_slider.max - a_slider.min) * a_weight) + a_slider.min};
         morphInterface->SetMorph(a_actor, a_slider.name.c_str(), a_key, val);
     }
 
     void OBody::ApplySliderSet(RE::Actor* a_actor, PresetManager::SliderSet& a_sliders, const char* a_key) const {
-        const float weight = GetWeight(a_actor);
+        const float weight{GetWeight(a_actor)};
         for (const auto& slider : a_sliders | std::views::values) ApplySlider(a_actor, slider, a_key, weight);
     }
 
@@ -276,11 +272,11 @@ namespace Body {
     bool OBody::IsClotheActive(RE::Actor* a_actor) const { return morphInterface->HasBodyMorphKey(a_actor, "OClothe"); }
 
     bool OBody::IsNaked(RE::Actor* a_actor, const bool a_removingArmor, const RE::TESForm* a_equippedArmor) {
-        auto& jsonParser = Parser::JSONParser::GetInstance();
+        auto& jsonParser{Parser::JSONParser::GetInstance()};
 
-        auto outfitBody = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody);
-        auto outergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary);
-        auto undergarmentChest = a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary);
+        auto outfitBody{a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kBody)};
+        auto outergarmentChest{a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestPrimary)};
+        auto undergarmentChest{a_actor->GetWornArmor(RE::BGSBipedObjectForm::BipedObjectSlot::kModChestSecondary)};
 
         // When the TES EquipEvent is sent, the inventory isn't updated yet
         // So we have to check if any of these armors is being removed...
@@ -543,4 +539,4 @@ namespace Body {
     Slider OBody::DeriveSlider(RE::Actor* a_actor, const char* a_morph, float a_target) const {
         return Slider{a_morph, a_target - GetMorph(a_actor, a_morph)};
     }
-} // namespace Body
+}  // namespace Body
