@@ -55,6 +55,7 @@ namespace Body {
         static bool IsFemale(RE::Actor* a_actor);
         bool IsProcessed(RE::Actor* a_actor) const;
         bool IsBlacklisted(RE::Actor* a_actor) const;
+        bool ShouldBlacklist(RE::Actor* a_actor) const;
 
         static PresetManager::SliderSet GenerateRandomNippleSliders();
         static PresetManager::SliderSet GenerateRandomGenitalSliders();
