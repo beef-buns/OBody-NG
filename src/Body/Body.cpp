@@ -5,6 +5,12 @@
 
 using namespace PresetManager;
 
+constexpr auto OBODY_BLACKLISTED = "OBodyBlacklisted";
+constexpr auto OBODY_BLACKLISTED_MALE = "OBodyBlacklistedMale";
+constexpr auto OBODY_BLACKLISTED_FEMALE = "OBodyBlacklistedFemale";
+constexpr auto OBODY_REFIT_BLACKLISTED = "OBodyRefitBlacklisted";
+constexpr auto OBODY_FORCE_REFIT = "OBodyForceRefit";
+
 Body::OBody Body::OBody::instance_;
 
 namespace Body {
@@ -158,6 +164,33 @@ namespace Body {
             });
     }
 
+    bool OBody::ShouldBlacklist(RE::Actor* a_actor) const {
+        if (a_actor->HasKeywordString(OBODY_BLACKLISTED)) {
+            return true;
+        }
+
+        auto actorBase = a_actor->GetActorBase();
+        if (actorBase) {
+            if (actorBase->HasKeywordString(OBODY_BLACKLISTED)) {
+                return true;
+            }
+
+            auto actorRace = actorBase->GetRace();
+            if (actorRace) {
+                if (actorRace->HasKeywordString(OBODY_BLACKLISTED)) {
+                    return true;
+                }
+                if (actorRace->HasKeywordString(OBODY_BLACKLISTED_MALE) && !IsFemale(a_actor)) {
+                    return true;
+                }
+                if (actorRace->HasKeywordString(OBODY_BLACKLISTED_FEMALE) && IsFemale(a_actor)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     void OBody::GenerateActorBody(RE::Actor* a_actor, ::OBody::API::IPluginInterface* responsibleInterface) const {
         // The main function of OBody NG
 
@@ -219,7 +252,7 @@ namespace Body {
         };
 
         // If NPC is blacklisted, set him as processed
-        if (jsonParser.IsNPCBlacklisted(actorName, actorID)) {
+        if (ShouldBlacklist(a_actor) || jsonParser.IsNPCBlacklisted(actorName, actorID)) {
             blacklistNPC();
             return;
         }

@@ -23,14 +23,14 @@ target_include_directories(OBody PRIVATE
     lib/commonlibsse-ng/include
 )
 target_include_directories(OBody SYSTEM PRIVATE
-    C:/Users/Judah/AppData/Local/.xmake/packages/r/rapidjson/2025.02.05/5aec2755925a45d9974d95d2cb7038b1/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/p/pugixml/v1.15/62451b04cb8d446fb52d4c6d38b1e19b/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/r/rapidjson/2025.02.05/5aec2755925a45d9974d95d2cb7038b1/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/p/pugixml/v1.15/62451b04cb8d446fb52d4c6d38b1e19b/include
     build/.packages/v/vcpkg_ryml/latest/26563ad9dadf4267b5b8edf7f93e90ee/vcpkg_installed/x64-windows-static-md/include
     build/.packages/v/vcpkg_boost-algorithm/latest/26563ad9dadf4267b5b8edf7f93e90ee/vcpkg_installed/x64-windows-static-md/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxmath/2024.02/b43cee1705a040bdb171c586b0ad9685/include/directxmath
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/s/spdlog/v1.15.3/6425784fcb5c43dea6fd2000c451e041/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/r/rapidcsv/v8.89/db521808c69746e586bc1366a7ce9679/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxmath/2024.02/b43cee1705a040bdb171c586b0ad9685/include/directxmath
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/s/spdlog/v1.16.0/1053dccb2da94316b3bef3cb1db15374/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/r/rapidcsv/v8.90/a58fdac348dd421e8914029384b2f0ed/include
 )
 target_compile_definitions(OBody PRIVATE
     SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_TRACE
@@ -53,6 +53,8 @@ if(CURRENT_COMPILER_ID STREQUAL "MSVC")
 target_compile_options(OBody PRIVATE
     $<$<COMPILE_LANGUAGE:C>:/Zc:preprocessor>
     $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+    $<$<COMPILE_LANGUAGE:C>:/wd4201>
+    $<$<COMPILE_LANGUAGE:CXX>:/wd4201>
 )
 endif()
 if(CURRENT_COMPILER_ID STREQUAL "MSVC")
@@ -104,22 +106,23 @@ target_link_libraries(OBody PRIVATE
     user32
     version
 )
-add_library(target_objectfiles_OBody_90F558FB OBJECT IMPORTED GLOBAL)
-set_property(TARGET target_objectfiles_OBody_90F558FB PROPERTY IMPORTED_OBJECTS
+add_library(target_objectfiles_OBody_46bd8302b0025ee5 OBJECT IMPORTED GLOBAL)
+set_property(TARGET target_objectfiles_OBody_46bd8302b0025ee5 PROPERTY IMPORTED_OBJECTS
     ${CMAKE_SOURCE_DIR}/build/.objs/OBody/windows/x64/releasedbg/gens/include/cxx/PCH.h_v143.pch.obj
 )
-target_link_libraries(OBody PRIVATE target_objectfiles_OBody_90F558FB)
+target_link_libraries(OBody PRIVATE target_objectfiles_OBody_46bd8302b0025ee5)
 target_link_directories(OBody PRIVATE
-    C:/Users/Judah/AppData/Local/.xmake/packages/p/pugixml/v1.15/62451b04cb8d446fb52d4c6d38b1e19b/lib
+    C:/Users/adwu/AppData/Local/.xmake/packages/p/pugixml/v1.15/62451b04cb8d446fb52d4c6d38b1e19b/lib
     build/.packages/v/vcpkg_ryml/latest/26563ad9dadf4267b5b8edf7f93e90ee/vcpkg_installed/x64-windows-static-md/lib
     build/windows/x64/releasedbg
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/lib
-    C:/Users/Judah/AppData/Local/.xmake/packages/s/spdlog/v1.15.3/6425784fcb5c43dea6fd2000c451e041/lib
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/lib
+    C:/Users/adwu/AppData/Local/.xmake/packages/s/spdlog/v1.16.0/1053dccb2da94316b3bef3cb1db15374/lib
 )
 # private sourcefiles from sourcebatch c++.build for target OBody
 target_sources(OBody PRIVATE 
     src/ActorTracker/ActorTracker.cpp
     src/API/PluginInterface.cpp
+    src/BackwardsCompatibility/BackwardsCompatibility.cpp
     src/Body/Body.cpp
     src/Body/Event.cpp
     src/JSONParser/JSONParser.cpp
@@ -141,6 +144,7 @@ target_sources(OBody PRIVATE FILE_SET HEADERS FILES
     include/ActorTracker/ActorTracker.h
     include/API/API.h
     include/API/PluginInterface.h
+    include/BackwardsCompatibility/BackwardsCompatibility.h
     include/Body/Body.h
     include/Body/Event.h
     include/JSONParser/JSONParser.h
@@ -170,10 +174,10 @@ target_include_directories(commonlibsse-ng INTERFACE
     lib/commonlibsse-ng/include
 )
 target_include_directories(commonlibsse-ng SYSTEM PRIVATE
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxmath/2024.02/b43cee1705a040bdb171c586b0ad9685/include/directxmath
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/s/spdlog/v1.15.3/6425784fcb5c43dea6fd2000c451e041/include
-    C:/Users/Judah/AppData/Local/.xmake/packages/r/rapidcsv/v8.89/db521808c69746e586bc1366a7ce9679/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxmath/2024.02/b43cee1705a040bdb171c586b0ad9685/include/directxmath
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/s/spdlog/v1.16.0/1053dccb2da94316b3bef3cb1db15374/include
+    C:/Users/adwu/AppData/Local/.xmake/packages/r/rapidcsv/v8.90/a58fdac348dd421e8914029384b2f0ed/include
 )
 target_compile_definitions(commonlibsse-ng PRIVATE
     ENABLE_SKYRIM_SE=1
@@ -289,14 +293,14 @@ target_link_libraries(commonlibsse-ng PRIVATE
     user32
     version
 )
-add_library(target_objectfiles_commonlibsse-ng_C23DE795 OBJECT IMPORTED GLOBAL)
-set_property(TARGET target_objectfiles_commonlibsse-ng_C23DE795 PROPERTY IMPORTED_OBJECTS
+add_library(target_objectfiles_commonlibsse-ng_bc2bb9e267798900 OBJECT IMPORTED GLOBAL)
+set_property(TARGET target_objectfiles_commonlibsse-ng_bc2bb9e267798900 PROPERTY IMPORTED_OBJECTS
     ${CMAKE_SOURCE_DIR}/build/.objs/commonlibsse-ng/windows/x64/releasedbg/gens/lib/commonlibsse-ng/include/SKSE/Impl/cxx/PCH.h_v143.pch.obj
 )
-target_link_libraries(commonlibsse-ng PRIVATE target_objectfiles_commonlibsse-ng_C23DE795)
+target_link_libraries(commonlibsse-ng PRIVATE target_objectfiles_commonlibsse-ng_bc2bb9e267798900)
 target_link_directories(commonlibsse-ng PRIVATE
-    C:/Users/Judah/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/lib
-    C:/Users/Judah/AppData/Local/.xmake/packages/s/spdlog/v1.15.3/6425784fcb5c43dea6fd2000c451e041/lib
+    C:/Users/adwu/AppData/Local/.xmake/packages/d/directxtk/24.2.0/f6fb9eaf439246fdb823f48a8816ec0c/lib
+    C:/Users/adwu/AppData/Local/.xmake/packages/s/spdlog/v1.16.0/1053dccb2da94316b3bef3cb1db15374/lib
 )
 # private sourcefiles from sourcebatch c++.build for target commonlibsse-ng
 target_sources(commonlibsse-ng PRIVATE 

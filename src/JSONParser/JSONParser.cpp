@@ -552,6 +552,10 @@ namespace Parser {
     }
 
     bool JSONParser::IsOutfitBlacklisted(const RE::TESObjectARMO& a_outfit) {
+        if (a_outfit.HasKeywordString("OBodyRefitBlacklisted")) {
+            return true;
+        }
+
         return IsStringInJsonConfigKey(a_outfit.GetName(), "blacklistedOutfitsFromORefit") ||
                IsOutfitInBlacklistedOutfitCategorySet(a_outfit.GetFormID()) ||
                IsStringInJsonConfigKey(GetNthFormLocationName(a_outfit.As<RE::TESForm>(), 0),
@@ -576,8 +580,9 @@ namespace Parser {
 
                 if (const RE::FormType itemFormType = bound_obj->GetFormType();
                     (itemFormType == RE::FormType::Armor || itemFormType == RE::FormType::Armature) &&
-                        IsStringInJsonConfigKey(inventory_entry_data->GetDisplayName(), "outfitsForceRefit") ||
-                    IsOutfitInForceRefitCategorySet(bound_obj->GetFormID())) {
+                        (IsStringInJsonConfigKey(inventory_entry_data->GetDisplayName(), "outfitsForceRefit") ||
+                         IsOutfitInForceRefitCategorySet(bound_obj->GetFormID()) ||
+                         bound_obj->As<RE::TESObjectARMO>()->HasKeywordString("OBodyForceRefit"))) {
                     logger::info("Outfit {} is in force refit list", inventory_entry_data->GetDisplayName());
 
                     return true;
